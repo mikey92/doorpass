@@ -19,7 +19,7 @@ import { buildMcp } from "./mcp.ts";
 import { ask, bedrock, MODEL } from "./agent.ts";
 import { makeWebhook, deliver } from "./simulate.ts";
 import { Linker, readCredentials } from "./link.ts";
-import { SimulatedLock, SwitchBotLock, type Lock } from "./lock.ts";
+import { OutageLock, SimulatedLock, SwitchBotLock, type Lock } from "./lock.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WEB = join(ROOT, "web");
@@ -69,7 +69,7 @@ function makeLock(): Lock {
   }
   return new SimulatedLock();
 }
-const lock = makeLock();
+const lock = new OutageLock(makeLock());
 
 const linker = creds ? new Linker(creds, join(ROOT, "data/tokens.json"), loggedFetch) : undefined;
 function playgroundToken(): string | undefined {
@@ -137,7 +137,7 @@ function snapshot(full = false) {
     tz: TZ,
     site: gate.s.site,
     staffed: gate.staffedNow(now),
-    lock: { kind: lock.kind, name: lock.name },
+    lock: { kind: lock.kind, name: lock.name, offline: lock.offline },
     members: gate.s.members.map((m) => ({ id: m.id, name: m.name, status: m.status, plan: m.plan, pass: full ? `/pass/${m.passToken}` : null })),
     manager: full,
     // Visitor photos are for the manager only.
@@ -376,7 +376,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const now = Date.now();
     const b = gate.live(now, m.id)[0] ?? gate.s.bookings.filter((x) => x.memberId === m.id && x.end >= now).sort((a, c) => a.start - c.start)[0];
     const last = [...gate.s.log].reverse().find((l) => l.memberId === m.id);
-    return json(res, 200, { site: gate.s.site.name, tz: TZ, member: { name: m.name, status: m.status, plan: m.plan }, booking: b ? { room: b.room, start: b.start, end: b.end, live: gate.live(now, m.id).some((x) => x.id === b.id) } : null, last: last ? { kind: last.kind, text: last.text, at: last.at } : null, staffed: gate.staffedNow(now) });
+    return json(res, 200, { site: gate.s.site.name, tz: TZ, member: { id: m.id, name: m.name, status: m.status, plan: m.plan }, booking: b ? { room: b.room, start: b.start, end: b.end, live: gate.live(now, m.id).some((x) => x.id === b.id) } : null, last: last ? { kind: last.kind, text: last.text, at: last.at } : null, staffed: gate.staffedNow(now) });
   }
   if (/^\/pass\/[\w-]{8,40}$/.test(p)) return res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(readFileSync(join(WEB, "pass.html")));
 
@@ -397,7 +397,13 @@ async function route(req: IncomingMessage, res: ServerResponse) {
       const hook = p.endsWith("ring") ? makeWebhook("button_press", gate.s.site.doorDeviceId) : makeWebhook("motion_detected", gate.s.site.doorDeviceId, { subType: "human" });
       return json(res, 200, { status: await deliver(`http://127.0.0.1:${PORT}/webhooks/ring`, KEY, hook) });
     }
+    if (p === "/api/demo/lock-offline") {
+      lock.offline = !lock.offline;
+      gate.log(Date.now(), { kind: "lock-error", text: lock.offline ? "Demo: the lock went offline (as if its Wi-Fi dropped)." : "Demo: the lock is back online." });
+      return json(res, 200, { offline: lock.offline });
+    }
     if (p === "/api/demo/reset") {
+      lock.offline = false;
       gate.stopTimers();
       const fresh = demoState(Date.now(), gate.s.site.doorDeviceId, TZ);
       // Keep the pass links people already have on their phones.

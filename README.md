@@ -92,3 +92,7 @@ public dashboard never shows them.
 See [FRICTION_LOG.md](FRICTION_LOG.md) for what got in the way on the Ring Partner API.
 
 MIT licensed.
+
+## Failure cases
+
+Lock offline, no answer, expired member, replayed and forged webhooks, restart while open: see [REHEARSAL.md](REHEARSAL.md), with the known limits.

@@ -135,3 +135,41 @@ export class SwitchBotLock implements Lock {
     return String(b.lockState ?? "").toLowerCase();
   }
 }
+
+/** Wraps a lock so the demo can take it "offline" (as when its Wi-Fi drops) and show that the door stays shut. */
+export class OutageLock implements Lock {
+  inner: Lock;
+  offline = false;
+  constructor(inner: Lock) {
+    this.inner = inner;
+  }
+  get kind() {
+    return this.inner.kind;
+  }
+  get name() {
+    return this.inner.name;
+  }
+  private check() {
+    if (this.offline) throw new Error("lock is offline");
+  }
+  async request(cmd: "lock" | "unlock") {
+    this.check();
+    return this.inner.request(cmd);
+  }
+  async confirm(want: LockState) {
+    this.check();
+    return this.inner.confirm(want);
+  }
+  async unlock() {
+    this.check();
+    return this.inner.unlock();
+  }
+  async lock() {
+    this.check();
+    return this.inner.lock();
+  }
+  async state() {
+    this.check();
+    return this.inner.state();
+  }
+}

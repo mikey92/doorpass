@@ -33,8 +33,8 @@ function render(s) {
   const r = s.ring;
   $("#ring-chip").className = "chip" + (r.connected ? " on" : "");
   $("#ring-text").textContent = r.connected ? `Ring · ${r.device.name}` : `Ring · ${/401/.test(r.error) ? "token expired" : r.error || "not connected"}`;
-  $("#lock-chip").className = "chip " + (s.lock.kind === "switchbot" ? "on" : "sim");
-  $("#lock-text").textContent = s.lock.kind === "switchbot" ? s.lock.name : "Simulated lock";
+  $("#lock-chip").className = "chip " + (s.lock.offline ? "" : s.lock.kind === "switchbot" ? "on" : "sim");
+  $("#lock-text").textContent = (s.lock.kind === "switchbot" ? s.lock.name : "Simulated lock") + (s.lock.offline ? " · offline" : "");
   $("#mode-off").setAttribute("aria-pressed", String(!s.staffed));
   $("#mode-on").setAttribute("aria-pressed", String(!!s.staffed));
 

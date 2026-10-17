@@ -171,3 +171,27 @@ test("after a restart with the door unlocked, it locks", async (t) => {
   await g.recover(T0);
   assert.equal(lock.s, "locked");
 });
+
+test("staff on site: a pass tap doesn't open, it says to ring for staff", async (t) => {
+  const { g, lock } = setup({ from: 0, to: 24 });
+  t.after(() => g.stopTimers());
+  const o = await g.tap("p-maya", T0 + MIN);
+  assert.equal(o.action, "deny");
+  assert.match((o as { reason: string }).reason, /Staff are on site/);
+  assert.equal(lock.s, "locked");
+});
+
+test("a lock that's offline: pass + doorbell still leave the door shut, logged for that member", async (t) => {
+  const { OutageLock, SimulatedLock } = await import("../src/lock.ts");
+  const s = setup().g.s;
+  const lock = new OutageLock(new SimulatedLock(0));
+  lock.offline = true;
+  const g = new Gate(s, lock);
+  t.after(() => g.stopTimers());
+  await g.tap("p-maya", T0 + MIN);
+  const o = await g.ring(ring(T0 + MIN + 5_000));
+  assert.equal(o.action, "deny");
+  const err = g.s.log.findLast((l) => l.kind === "lock-error")!;
+  assert.equal(err.memberId, "maya");
+  assert.match(err.text, /Door stays closed/);
+});

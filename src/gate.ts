@@ -103,7 +103,7 @@ export class Gate {
     return this.s.members.find((m) => m.id === id);
   }
 
-  private log(now: number, e: Omit<LogEntry, "id" | "at">): LogEntry {
+  log(now: number, e: Omit<LogEntry, "id" | "at">): LogEntry {
     const full = { id: `L${now}-${++this.n}`, at: now, ...e };
     this.s.log.push(full);
     if (this.s.log.length > 1000) this.s.log.splice(0, 200);
@@ -183,6 +183,8 @@ export class Gate {
       this.log(now, { kind: "deny", memberId: m.id, text: `${m.name}'s pass was refused: no booking now.` });
       return { action: "deny", reason: next ? `Your booking starts at ${time(next.start, this.s.site.tz)}. The door opens 10 minutes before.` : "You have no booking right now." };
     }
+    // With staff on site the doorbell only announces; the pass doesn't open the door.
+    if (this.staffedNow(now)) return { action: "deny", reason: "Staff are on site. Ring the doorbell and they'll let you in." };
     const ring = [...this.s.rings].reverse().find((r) => !r.handled && now - r.at <= RULES.pairMs);
     if (ring) return this.open(now, ring, m.id, "doorbell + booking + pass");
     // One waiting tap per member: a double tap must not open the door twice.

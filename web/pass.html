@@ -119,6 +119,7 @@ $("#open").onclick = async () => {
   $("#open").disabled = true;
   const o = await (await fetch(`/api/pass/${token}/tap`, { method: "POST" })).json();
   if (o.action === "open") opened();
+  else if (o.action === "deny" && /lock/i.test(o.reason || "")) status("no", "The lock didn't respond, so the door stayed locked. Call the manager.");
   else if (o.action === "wait-ring") {
     step("#s-tap", 1);
     let left = 60;
@@ -130,9 +131,13 @@ $("#open").onclick = async () => {
 };
 
 await load();
+const me = (await (await fetch(`/api/pass/${token}`)).json()).member?.id;
 new EventSource("/api/stream").addEventListener("log", (e) => {
   const l = JSON.parse(e.data);
-  if (l.kind === "open" && $("#s-tap").classList.contains("done") && !$("#open").classList.contains("open")) { clearInterval(waitTimer); opened(); }
+  // Only this member's own door events: another visitor's opening isn't yours.
+  if (l.memberId !== me || !$("#s-tap").classList.contains("done") || $("#open").classList.contains("open")) return;
+  if (l.kind === "open") { clearInterval(waitTimer); opened(); }
+  if (l.kind === "lock-error") { clearInterval(waitTimer); step("#s-tap", 0); status("no", "The lock didn't respond, so the door stayed locked. Call the manager."); }
 });
 </script>
 </body>
