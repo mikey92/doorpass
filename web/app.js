@@ -52,7 +52,7 @@ function render(s) {
 
   const req = s.requests[0];
   $("#request").innerHTML = req
-    ? `<div class="req">${snap(req.ringId) ? `<img class="req-snap" src="${snap(req.ringId)}" alt="Ring photo of the visitor">` : ""}<b>Someone is at the door</b><div class="m">${esc(req.reason)} · rang ${tms(req.at)} · closes in <span id="left"></span></div>${KEY ? `<div class="btns"><button class="in" data-decide="1">Let in</button><button data-decide="0">Keep closed</button></div>` : ""}</div>`
+    ? `<div class="req">${snap(req.ringId) ? `<img class="req-snap" src="${snap(req.ringId)}" alt="Ring photo of the visitor">` : ""}${S.notes?.[req.ringId] ? `<p class="note">${esc(S.notes[req.ringId])}</p>` : ""}<b>Someone is at the door</b><div class="m">${esc(req.reason)} · rang ${tms(req.at)} · closes in <span id="left"></span></div>${KEY ? `<div class="btns"><button class="in" data-decide="1">Let in</button><button data-decide="0">Keep closed</button></div>` : ""}</div>`
     : "";
   document.querySelectorAll("[data-decide]").forEach((b) => (b.onclick = () => manage("/api/manage/decide", { requestId: req.id, approve: b.dataset.decide === "1" })));
 
@@ -79,7 +79,7 @@ function render(s) {
         const ev = (l.evidence ?? []).map((e) => `<span>${esc(e.split(":")[0])}</span>`).join("") + (l.latencyMs != null ? `<span>${sec(l.latencyMs)}</span>` : "");
         const flags = (l.flags ?? []).map((f) => ` <span class="flag">⚠ ${esc(f)}</span>`).join("");
         const photo = ["ring", "request", "open", "notify"].includes(l.kind) ? snap(l.ringId) : "";
-        return `<div class="row ic-row${fresh ? " new" : ""}"><div class="glyph g-${esc(l.kind)}" title="${esc(l.kind)}">${GLYPH[l.kind] ?? "•"}</div><div class="main">${esc(l.text)}${flags}${ev ? `<div class="ev">${ev}</div>` : ""}${photo ? `<a href="${photo}" target="_blank" rel="noopener"><img class="log-snap" src="${photo}" alt="Ring photo"></a>` : ""}</div><time>${tms(l.at)}</time></div>`;
+        return `<div class="row ic-row${fresh ? " new" : ""}"><div class="glyph g-${esc(l.kind)}" title="${esc(l.kind)}">${GLYPH[l.kind] ?? "•"}</div><div class="main">${esc(l.text)}${flags}${ev ? `<div class="ev">${ev}</div>` : ""}${photo ? `<a href="${photo}" target="_blank" rel="noopener"><img class="log-snap" src="${photo}" alt="Ring photo"></a>${S.notes?.[l.ringId] ? `<div class="note">${esc(S.notes[l.ringId])}</div>` : ""}` : ""}</div><time>${tms(l.at)}</time></div>`;
       })
       .join("") || `<div class="row"><div class="main muted">Nothing yet tonight</div></div>`;
   $("#api").innerHTML = r.log.slice().reverse().map((a) => `<li><time>${tms(a.at)}</time> <b>${esc(a.method)}</b> ${esc(a.path)} → ${esc(a.status)} <span class="muted">${esc(a.ms)} ms</span></li>`).join("") || "<li class=\"muted\">No calls yet</li>";

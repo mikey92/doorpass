@@ -62,6 +62,8 @@ export interface GateState {
   openedAt?: number;
   /** Ring snapshots of doorbell presses: ring id → file under data/snaps. */
   snaps?: Record<string, string>;
+  /** What the doorbell camera shows, described by Amazon Bedrock: ring id → one sentence. */
+  notes?: Record<string, string>;
 }
 
 export const RULES = {

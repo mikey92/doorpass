@@ -16,7 +16,7 @@ import { Gate, time, type LogEntry } from "./gate.ts";
 import { RingClient, parseWebhook, verify } from "./ring.ts";
 import { Store, demoState, rollDemoBookings } from "./store.ts";
 import { buildMcp } from "./mcp.ts";
-import { ask, bedrock, MODEL } from "./agent.ts";
+import { ask, bedrock, describeVisitor, MODEL } from "./agent.ts";
 import { makeWebhook, deliver } from "./simulate.ts";
 import { Linker, readCredentials } from "./link.ts";
 import { OutageLock, SimulatedLock, SwitchBotLock, type Lock } from "./lock.ts";
@@ -142,6 +142,7 @@ function snapshot(full = false) {
     manager: full,
     // Visitor photos are for the manager only.
     snaps: full ? (gate.s.snaps ?? {}) : {},
+    notes: full ? (gate.s.notes ?? {}) : {},
     bookings: gate.s.bookings.filter((b) => b.end >= now - 3_600_000).sort((a, b) => a.start - b.start).map((b) => ({ ...b, name: gate.member(b.memberId)?.name, live: gate.live(now, b.memberId).some((x) => x.id === b.id) })),
     requests: gate.s.requests.filter((r) => r.status === "pending"),
     log: gate.s.log.slice(-40),
@@ -172,6 +173,17 @@ async function grabSnapshot(ringId: string, deviceId: string, at: number) {
       delete snaps[old];
     }
     gate.onChange();
+    // Ask Bedrock what the camera shows, for the manager's request card and for Alexa.
+    const key = bedrockKey();
+    if (key) {
+      const note = await describeVisitor(bedrock(key, MODEL, undefined, loggedFetch), jpg).catch(() => "");
+      if (note) {
+        const notes = (gate.s.notes ??= {});
+        notes[ringId] = note.slice(0, 200);
+        for (const old of Object.keys(notes)) if (!snaps[old]) delete notes[old];
+        gate.onChange();
+      }
+    }
     return;
   }
 }
@@ -319,7 +331,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "") || (req.headers["x-manager-key"] as string | undefined);
     if (writes && !same(auth, MANAGER_KEY)) return json(res, 403, { jsonrpc: "2.0", id: writes.id ?? null, error: { code: -32001, message: "Only the manager can open or refuse the door. Send the manager key." } });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    const server = buildMcp(gate, Date.now, () => push("state", snapshot()));
+    const server = buildMcp(gate, Date.now, () => push("state", snapshot()), undefined, same(auth, MANAGER_KEY));
     res.on("close", () => {
       transport.close();
       server.close();

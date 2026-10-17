@@ -74,3 +74,16 @@ export async function ask(said: string, mcp: Mcp, converse: Converse, opts: { ca
   }
   return { text: "Sorry, that took too many steps.", steps, ms: Date.now() - t0, model: opts.model ?? MODEL };
 }
+
+/**
+ * One sentence about who is at the door, from Ring's snapshot, for the manager deciding whether to open.
+ * Describes what is visible (people, packages, uniforms); never guesses identity.
+ */
+export async function describeVisitor(converse: Converse, jpg: Buffer): Promise<string> {
+  const res = await converse({
+    system: [{ text: "You describe doorbell camera frames for the manager of a small business deciding whether to open the door. Answer with ONE short sentence, at most 20 words: how many people (count a hand or arm reaching toward the camera as a person), what they carry or wear that matters (package, uniform, instrument case), anything unusual. Never guess names, age, ethnicity or identity. If no one is visible, say so." }],
+    messages: [{ role: "user", content: [{ image: { format: "jpeg", source: { bytes: jpg.toString("base64") } } }, { text: "Who is at the door?" }] }],
+    inferenceConfig: { maxTokens: 80, temperature: 0.2 },
+  });
+  return (res.output?.message?.content ?? []).map((c: any) => c.text ?? "").join(" ").replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim().split(/(?<=[.!?])\s/)[0];
+}

@@ -37,3 +37,12 @@ test("agent: without the manager key the door tools aren't offered, and a forced
   assert.deepEqual(calls, [], "let_them_in never reached the MCP server");
   assert.equal(a.steps[0].result, "That action needs the manager.");
 });
+
+test("describeVisitor: sends the Ring JPEG to the model and keeps one sentence", async () => {
+  const { describeVisitor } = await import("../src/agent.ts");
+  let sent: any;
+  const note = await describeVisitor(async (b: any) => ((sent = b), { output: { message: { content: [{ text: "One person holding a guitar case. They look toward the camera." }] } } }), Buffer.from([0xff, 0xd8]));
+  assert.equal(note, "One person holding a guitar case.");
+  assert.equal(sent.messages[0].content[0].image.format, "jpeg");
+  assert.equal(sent.messages[0].content[0].image.source.bytes, Buffer.from([0xff, 0xd8]).toString("base64"));
+});

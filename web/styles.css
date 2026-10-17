@@ -120,3 +120,5 @@ button { font: inherit; cursor: pointer; color: inherit; }
 .ask #mic.on { background: var(--red); color: #fff; }
 .steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .steps li { font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; background: var(--fill); color: var(--secondary); padding: 2px 8px; border-radius: 6px; }
+.note { font-size: 13px; color: var(--secondary); margin: 6px 0 10px; font-style: italic; }
+.note::before { content: "Camera: "; font-style: normal; font-weight: 600; }

@@ -9,7 +9,7 @@ import { doorCardHtml } from "./card.ts";
 
 const CARD = "ui://doorpass/door-card";
 
-export function buildMcp(gate: Gate, now: () => number, afterChange: () => void, manager = "Manager (Alexa)") {
+export function buildMcp(gate: Gate, now: () => number, afterChange: () => void, manager = "Manager (Alexa)", isManager = false) {
   const server = new McpServer(
     { name: "doorpass", version: "0.1.0" },
     { instructions: "DoorPass runs the front door of an unstaffed space with a Ring doorbell, the booking system and a smart lock. Answer in one or two spoken sentences; the card shows the detail. Only call let_them_in after the manager clearly says to." },
@@ -24,7 +24,9 @@ export function buildMcp(gate: Gate, now: () => number, afterChange: () => void,
     const ring = req ? gate.s.rings.find((r) => r.id === req.ringId) : [...gate.s.rings].reverse()[0];
     const live = gate.live(t).map((b) => ({ name: gate.member(b.memberId)!.name, room: b.room, until: b.end }));
     const recent = gate.s.log.slice(-6).reverse().map((l) => ({ at: l.at, kind: l.kind, text: l.text, flags: l.flags ?? [] }));
-    return { site: gate.s.site.name, now: t, tz, staffed: gate.staffedNow(t), request: req ? { id: req.id, reason: req.reason, at: req.at, expiresAt: req.expiresAt } : null, lastRing: ring ? ring.at : null, booked: live, recent };
+    // The camera description is for the manager only.
+    const camera = isManager && ring ? gate.s.notes?.[ring.id] : undefined;
+    return { site: gate.s.site.name, camera, now: t, tz, staffed: gate.staffedNow(t), request: req ? { id: req.id, reason: req.reason, at: req.at, expiresAt: req.expiresAt } : null, lastRing: ring ? ring.at : null, booked: live, recent };
   };
 
   // The request a tool should act on: the one named if it is still open, otherwise the open one.
@@ -45,7 +47,7 @@ export function buildMcp(gate: Gate, now: () => number, afterChange: () => void,
       const d = door();
       const ago = d.lastRing ? Math.round((d.now - d.lastRing) / 1000) : null;
       const text = d.request
-        ? `Someone rang ${ago} seconds ago. ${d.request.reason}. ${d.booked.length ? `Booked now: ${d.booked.map((b) => b.name).join(", ")}.` : ""} Say "let them in" or "keep it closed".`
+        ? `Someone rang ${ago} seconds ago. ${d.request.reason}. ${d.camera ? `The doorbell camera shows: ${d.camera} ` : ""}${d.booked.length ? `Booked now: ${d.booked.map((b) => b.name).join(", ")}.` : ""} Say "let them in" or "keep it closed".`
         : d.lastRing
           ? `The last ring was ${ago! < 120 ? `${ago} seconds ago` : `at ${time(d.lastRing, tz)}`}. Nothing is waiting for you.`
           : "Nobody has rung today.";
