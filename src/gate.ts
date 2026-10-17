@@ -89,6 +89,7 @@ export class Gate {
   lock: Lock;
   onChange: (e?: LogEntry) => void = () => {};
   private relockTimer?: ReturnType<typeof setTimeout>;
+  private openGen = 0;
   private n = 0;
 
   constructor(state: GateState, lock: Lock) {
@@ -138,7 +139,7 @@ export class Gate {
     }
 
     // Pair with a pass tap from the last minute.
-    const tap = [...this.s.taps].reverse().find((t) => e.at - t.at <= RULES.pairMs && e.at - t.at >= -5 * SEC && this.live(now, t.memberId).length);
+    const tap = [...this.s.taps].reverse().find((t) => Math.abs(e.at - t.at) <= RULES.pairMs && this.live(now, t.memberId).length);
     if (tap) {
       // A tap opens the door once.
       this.s.taps = this.s.taps.filter((t) => t !== tap);
@@ -182,6 +183,8 @@ export class Gate {
     }
     const ring = [...this.s.rings].reverse().find((r) => !r.handled && now - r.at <= RULES.pairMs);
     if (ring) return this.open(now, ring, m.id, "doorbell + booking + pass");
+    // One waiting tap per member: a double tap must not open the door twice.
+    this.s.taps = this.s.taps.filter((t) => t.memberId !== m.id);
     this.s.taps.push({ memberId: m.id, at: now });
     if (this.s.taps.length > 200) this.s.taps.splice(0, 50);
     this.log(now, { kind: "pass", memberId: m.id, bookingId: b.id, text: `${m.name} tapped their pass. Waiting for the doorbell.` });
@@ -242,7 +245,9 @@ export class Gate {
       this.log(now, { kind: "lock-error", memberId, ringId: ring?.id, text: `The lock didn't accept the command (${(err as Error).message.slice(0, 80)}). Door stays closed.` });
       return { action: "deny", reason: "The lock didn't respond" };
     }
-    const latencyMs = ring ? Math.max(0, Date.now() - ring.at) : undefined;
+    // Doorbell-to-lock time only means something when the doorbell itself opened the door, not a manager's answer.
+    const timed = !!ring && !why.startsWith("approved");
+    const latencyMs = timed ? Math.max(0, Date.now() - ring!.at) : undefined;
     const state: LockState = "unlocked";
     this.s.openedAt = now;
     this.log(now, {
@@ -255,20 +260,29 @@ export class Gate {
       evidence: [ring ? `ring:${ring.id}` : "", b ? `booking:${b.id}` : "", `lock:${this.lock.kind}`].filter(Boolean),
       text: `Door opened for ${m ? `${m.name}${b ? ` (${b.room}, ${time(b.start, this.s.site.tz)}–${time(b.end, this.s.site.tz)})` : ""}` : "a visitor"}: ${why}.`,
     });
+    // The re-lock clock starts once the lock reports open, so the visitor gets the full window.
+    clearTimeout(this.relockTimer);
+    const gen = ++this.openGen;
+    const armRelock = () => {
+      if (gen !== this.openGen) return;
+      clearTimeout(this.relockTimer);
+      this.relockTimer = setTimeout(() => this.relock(Date.now()), RULES.relockMs);
+    };
     this.lock
       .confirm("unlocked")
       .then((st) => {
-        const ms = ring ? Date.now() - ring.at : undefined;
+        if (gen !== this.openGen) return;
+        const ms = timed ? Date.now() - ring!.at : undefined;
         if (st === "unlocked") this.log(Date.now(), { kind: "confirm", ringId: ring?.id, lock: st, latencyMs: ms, text: `${this.lock.name} reported unlocked${ms != null ? ` (${(ms / 1000).toFixed(1)} s after the doorbell)` : ""}.` });
         else this.log(Date.now(), { kind: "lock-error", ringId: ring?.id, lock: st, text: `${this.lock.name} reported "${st}" instead of unlocked. Check the door.` });
       })
-      .catch(() => {});
-    clearTimeout(this.relockTimer);
-    this.relockTimer = setTimeout(() => this.relock(Date.now()), RULES.relockMs);
+      .catch(() => {})
+      .finally(armRelock);
     return { action: "open", memberId, bookingId: b?.id, latencyMs, lock: state };
   }
 
   async relock(now: number) {
+    this.openGen++;
     try {
       const st = await this.lock.lock();
       this.log(now, { kind: "relock", lock: st, text: st === "locked" ? "Locked again." : `Lock reported "${st}" when re-locking.` });
@@ -288,6 +302,18 @@ export class Gate {
 
   stopTimers() {
     clearTimeout(this.relockTimer);
+    this.openGen++;
+  }
+
+  /** After a restart the re-lock timer is gone: if the lock was left open, lock it. */
+  async recover(now: number) {
+    try {
+      const st = await this.lock.state();
+      if (st === "unlocked" || st === "unlocking") {
+        this.log(now, { kind: "lock-error", lock: st, text: "DoorPass restarted with the door unlocked. Locking it now." });
+        await this.relock(now);
+      }
+    } catch {}
   }
 }
 

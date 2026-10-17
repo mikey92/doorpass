@@ -136,3 +136,38 @@ test("the door opens on the lock's acknowledgement; its confirmation is logged a
   const kinds = g.s.log.map((l) => l.kind);
   assert.ok(kinds.indexOf("open") < kinds.indexOf("confirm"));
 });
+
+test("a doorbell webhook that arrives late still pairs with a tap made after the press", async (t) => {
+  const { g } = setup();
+  t.after(() => g.stopTimers());
+  // Pressed at T0+60s, tapped at T0+80s, webhook delivered (retry) at T0+90s.
+  assert.equal((await g.tap("p-maya", T0 + 80_000)).action, "wait-ring");
+  assert.equal((await g.ring(ring(T0 + 60_000), T0 + 90_000)).action, "open");
+});
+
+test("a double tap waits as one tap: the second doorbell doesn't open", async (t) => {
+  const { g } = setup();
+  t.after(() => g.stopTimers());
+  await g.tap("p-maya", T0);
+  await g.tap("p-maya", T0 + 2_000);
+  assert.equal((await g.ring(ring(T0 + 10_000))).action, "open");
+  assert.equal((await g.ring(ring(T0 + 20_000))).action, "wait-pass");
+});
+
+test("a manager's approval doesn't report a doorbell-to-lock time", async (t) => {
+  const { g } = setup();
+  t.after(() => g.stopTimers());
+  const r = await g.ring(ring(T0 + 70 * MIN));
+  assert.equal(r.action, "request");
+  const o = await g.decide((r as { requestId: string }).requestId, true, "Manager", T0 + 70 * MIN + 30_000);
+  assert.equal(o.action, "open");
+  assert.equal(g.s.log.findLast((l) => l.kind === "open")!.latencyMs, undefined);
+});
+
+test("after a restart with the door unlocked, it locks", async (t) => {
+  const { g, lock } = setup();
+  t.after(() => g.stopTimers());
+  await lock.unlock();
+  await g.recover(T0);
+  assert.equal(lock.s, "locked");
+});

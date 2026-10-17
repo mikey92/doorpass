@@ -15,31 +15,35 @@ function doorOpen(s) {
   return last && last.kind === "open" && Date.now() - last.at < 15_000;
 }
 
+const LOCKED = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const OPENED = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>';
+const GLYPH = { ring: "🔔", pass: "📱", open: "✓", confirm: "✓", relock: "🔒", request: "?", approve: "✓", deny: "✕", expire: "⏱", enter: "👤", notify: "🔔", "lock-error": "!" };
+const sec = (ms) => `${(ms / 1000).toFixed(1)} s`;
+
 function render(s) {
   const first = !S;
   S = s;
   TZ = s.tz;
-  $("#site").textContent = `· ${s.site.name}`;
+  $("#site").textContent = s.site.name;
   const r = s.ring;
   $("#ring-chip").className = "chip" + (r.connected ? " on" : "");
-  $("#ring-text").textContent = r.connected ? `Ring · ${r.device.name} (${r.via})` : `Ring · ${/401/.test(r.error) ? "token expired" : r.error || "not connected"}`;
+  $("#ring-text").textContent = r.connected ? `Ring · ${r.device.name}` : `Ring · ${/401/.test(r.error) ? "token expired" : r.error || "not connected"}`;
   $("#lock-chip").className = "chip " + (s.lock.kind === "switchbot" ? "on" : "sim");
-  $("#lock-text").textContent = s.lock.kind === "switchbot" ? `${s.lock.name}` : "Simulated lock";
-  const st = $("#staffed");
-  st.textContent = s.staffed ? "Staff on site: doorbell only announces" : "Unstaffed: door runs itself";
-  st.classList.toggle("staffed", s.staffed);
+  $("#lock-text").textContent = s.lock.kind === "switchbot" ? s.lock.name : "Simulated lock";
+  $("#mode-off").setAttribute("aria-pressed", String(!s.staffed));
+  $("#mode-on").setAttribute("aria-pressed", String(!!s.staffed));
 
   const open = doorOpen(s);
-  $("#door").className = "panel door " + (open ? "open" : "locked");
+  $("#door").className = "door " + (open ? "open" : "locked");
+  $("#door-icon").innerHTML = open ? OPENED : LOCKED;
   $("#door-state").textContent = open ? "Open" : "Locked";
   const lastOpen = [...s.log].reverse().find((l) => l.kind === "open");
-  $("#door-sub").textContent = lastOpen ? `Last opened ${tm(lastOpen.at)}` : "";
+  $("#door-sub").textContent = lastOpen ? `Last opened ${tm(lastOpen.at)}` : s.staffed ? "Staff on site · the doorbell only announces" : "Runs itself · nobody at the desk";
   const lat = lastOpen?.latencyMs;
-  $("#latency").hidden = lat == null;
-  if (lat != null) $("#latency-v").textContent = `${(lat / 1000).toFixed(1)} s`;
   const conf = lastOpen ? s.log.find((l) => l.kind === "confirm" && l.ringId === lastOpen.ringId) : null;
-  $("#confirm").hidden = !conf;
-  if (conf) $("#confirm-v").textContent = `${(conf.latencyMs / 1000).toFixed(1)} s`;
+  $("#metrics").hidden = lat == null && !conf;
+  $("#latency-v").textContent = lat != null ? sec(lat) : "—";
+  $("#confirm-v").textContent = conf ? sec(conf.latencyMs) : "—";
 
   const req = s.requests[0];
   $("#request").innerHTML = req
@@ -51,26 +55,28 @@ function render(s) {
     s.bookings
       .map((b) => {
         const m = s.members.find((x) => x.id === b.memberId);
-        const [cls, label] = m && m.status !== "active" ? [m.status, `membership ${m.status}`] : b.live ? ["live", "can enter now"] : b.start > s.now ? ["", "later"] : ["", "ended"];
-        return `<li><div>${esc(b.name)} <span class="sub">${esc(b.room)} · ${tm(b.start)}–${tm(b.end)}</span></div><span class="tag ${cls}">${label}</span></li>`;
+        const [cls, label] = m && m.status !== "active" ? ["bad", `Membership ${m.status}`] : b.live ? ["live", "Now"] : b.start > s.now ? ["", "Later"] : ["", "Ended"];
+        return `<div class="row"><div class="main">${esc(b.name)}<small>${esc(b.room)} · ${tm(b.start)}–${tm(b.end)}</small></div><span class="badge ${cls}">${label}</span></div>`;
       })
-      .join("") || "<li>No bookings.</li>";
+      .join("") || `<div class="row"><div class="main muted">No bookings today</div></div>`;
   $("#members").innerHTML = s.members
-    .map((m) => `<li><div>${esc(m.name)} <span class="sub">${esc(m.plan)}</span></div>${m.status !== "active" ? `<span class="tag ${m.status}">${m.status}</span>` : ""}${m.pass ? `<a href="${m.pass}" target="_blank" rel="noopener">pass ↗</a>` : ""}</li>`)
+    .map((m) => `<div class="row"><div class="main">${esc(m.name)}<small>${esc(m.plan)}</small></div>${m.status !== "active" ? `<span class="badge bad">${esc(m.status)}</span>` : ""}${m.pass ? `<a href="${esc(m.pass)}" target="_blank" rel="noopener">Pass</a>` : ""}</div>`)
     .join("");
 
   if (first) s.log.forEach((l) => seen.add(l.id));
-  $("#log").innerHTML = s.log
-    .slice()
-    .reverse()
-    .map((l) => {
-      const fresh = !seen.has(l.id);
-      seen.add(l.id);
-      const ev = (l.evidence ?? []).map((e) => `<span>${esc(e.split(":")[0])}</span>`).join("") + (l.latencyMs != null ? `<span>${(l.latencyMs / 1000).toFixed(1)} s</span>` : "");
-      return `<li class="${fresh ? "new" : ""}"><time>${tms(l.at)}</time><div><span class="k k-${l.kind}">${esc(l.kind)}</span>${esc(l.text)}${(l.flags ?? []).map((f) => ` <span class="flag">⚠ ${esc(f)}</span>`).join("")}${ev ? `<div class="ev">${ev}</div>` : ""}</div></li>`;
-    })
-    .join("");
-  $("#api").innerHTML = r.log.slice().reverse().map((a) => `<li>${tms(a.at)} <b>${a.method}</b> ${esc(a.path)} → ${a.status} (${a.ms} ms)</li>`).join("") || "<li>—</li>";
+  $("#log").innerHTML =
+    s.log
+      .slice()
+      .reverse()
+      .map((l) => {
+        const fresh = !seen.has(l.id);
+        seen.add(l.id);
+        const ev = (l.evidence ?? []).map((e) => `<span>${esc(e.split(":")[0])}</span>`).join("") + (l.latencyMs != null ? `<span>${sec(l.latencyMs)}</span>` : "");
+        const flags = (l.flags ?? []).map((f) => ` <span class="flag">⚠ ${esc(f)}</span>`).join("");
+        return `<div class="row ic-row${fresh ? " new" : ""}"><div class="glyph g-${esc(l.kind)}" title="${esc(l.kind)}">${GLYPH[l.kind] ?? "•"}</div><div class="main">${esc(l.text)}${flags}${ev ? `<div class="ev">${ev}</div>` : ""}</div><time>${tms(l.at)}</time></div>`;
+      })
+      .join("") || `<div class="row"><div class="main muted">Nothing yet tonight</div></div>`;
+  $("#api").innerHTML = r.log.slice().reverse().map((a) => `<li><time>${tms(a.at)}</time> <b>${esc(a.method)}</b> ${esc(a.path)} → ${esc(a.status)} <span class="muted">${esc(a.ms)} ms</span></li>`).join("") || "<li class=\"muted\">No calls yet</li>";
 }
 
 setInterval(() => {
@@ -90,7 +96,9 @@ const manage = (path, body) =>
     if (r.status === 403) alert("Manager actions need the key in the address (#key=…).");
     return r.json();
   });
-$("#staffed").onclick = () => KEY && manage("/api/manage/staffed", { on: !S.staffed });
+$("#mode-off").onclick = () => KEY && S.staffed && manage("/api/manage/staffed", { on: false });
+$("#mode-on").onclick = () => KEY && !S.staffed && manage("/api/manage/staffed", { on: true });
+if (!KEY) document.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
 if (KEY) $("#demo").hidden = false;
 document.querySelectorAll("[data-demo]").forEach((b) => (b.onclick = () => manage(`/api/demo/${b.dataset.demo}`, {})));
 
@@ -100,7 +108,7 @@ const mcpLog = (dir, m) => ($("#mcp-log").textContent = `${dir} ${JSON.stringify
 async function mcp(method, params) {
   const msg = { jsonrpc: "2.0", id: rpcId++, method, params };
   mcpLog("→", msg);
-  const r = await fetch("/mcp", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25" }, body: JSON.stringify(msg) });
+  const r = await fetch("/mcp", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25", ...(KEY ? { Authorization: `Bearer ${KEY}` } : {}) }, body: JSON.stringify(msg) });
   const j = await r.json();
   mcpLog("←", j);
   if (j.error) throw new Error(j.error.message);
@@ -141,6 +149,8 @@ async function ask(k) {
     $("#reply").textContent = `DoorPass isn't answering (${e.message}).`;
   }
 }
+// Without the manager key, Alexa can tell you who's there but not open the door.
+if (!KEY) document.querySelectorAll('[data-q="in"], [data-q="out"]').forEach((b) => b.remove());
 document.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => ask(b.dataset.q)));
 
 // The card's buttons call tools through the host, as MCP Apps do.

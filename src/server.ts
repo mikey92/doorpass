@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Gate, time, type LogEntry } from "./gate.ts";
 import { RingClient, parseWebhook, verify } from "./ring.ts";
-import { Store, demoState } from "./store.ts";
+import { Store, demoState, rollDemoBookings } from "./store.ts";
 import { buildMcp } from "./mcp.ts";
 import { makeWebhook, deliver } from "./simulate.ts";
 import { Linker, readCredentials } from "./link.ts";
@@ -84,6 +84,12 @@ const ringStatus = { connected: false, via: "" as "" | "linked account" | "playg
 
 const store = new Store(DATA, () => demoState(Date.now(), SIM_DOOR, TZ));
 const gate = new Gate(store.state, lock);
+const WRITE_TOOLS = new Set(["let_them_in", "keep_door_closed"]);
+rollDemoBookings(gate.s, Date.now());
+setInterval(() => {
+  rollDemoBookings(gate.s, Date.now());
+  gate.onChange();
+}, 30 * 60_000).unref();
 
 // Live updates for the dashboard and member passes.
 // Manager streams get member pass links; public ones (judges, member passes) don't.
@@ -250,6 +256,11 @@ async function route(req: IncomingMessage, res: ServerResponse) {
         return json(res, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
       }
     }
+    // Reading the door is open; opening or refusing it needs the manager key, same as the dashboard buttons.
+    const msgs = (Array.isArray(raw) ? raw : [raw]) as { id?: unknown; method?: string; params?: { name?: string } }[];
+    const writes = msgs.find((m) => m?.method === "tools/call" && WRITE_TOOLS.has(m.params?.name ?? ""));
+    const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "") || (req.headers["x-manager-key"] as string | undefined);
+    if (writes && !same(auth, MANAGER_KEY)) return json(res, 403, { jsonrpc: "2.0", id: writes.id ?? null, error: { code: -32001, message: "Only the manager can open or refuse the door. Send the manager key." } });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     const server = buildMcp(gate, Date.now, () => push("state", snapshot()));
     res.on("close", () => {
@@ -306,6 +317,8 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     if (p === "/api/demo/reset") {
       gate.stopTimers();
       const fresh = demoState(Date.now(), gate.s.site.doorDeviceId, TZ);
+      // Keep the pass links people already have on their phones.
+      for (const m of fresh.members) m.passToken = gate.s.members.find((x) => x.id === m.id)?.passToken ?? m.passToken;
       Object.assign(gate.s, { ...fresh, site: { ...fresh.site, staffed: undefined }, seen: gate.s.seen });
       gate.onChange();
       return json(res, 200, { ok: true });
@@ -330,6 +343,7 @@ createServer((req, res) =>
 ).listen(PORT, process.env.HOST ?? "127.0.0.1", async () => {
   console.log(`DoorPass on http://localhost:${PORT}  (MCP /mcp, Ring /webhooks/ring /ring/token /ring/link)`);
   console.log(`Lock: ${lock.name} (${lock.kind}); Ring app credentials ${creds ? "loaded" : "missing"}`);
+  await gate.recover(Date.now());
   await connectRing();
   console.log(ringStatus.connected ? `Ring: "${ringStatus.device?.name}" via ${ringStatus.via}` : `Ring: not connected (${ringStatus.error})`);
   setInterval(() => {

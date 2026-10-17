@@ -40,7 +40,7 @@ export function buildMcp(gate: Gate, now: () => number, afterChange: () => void,
       const text = d.request
         ? `Someone rang ${ago} seconds ago. ${d.request.reason}. ${d.booked.length ? `Booked now: ${d.booked.map((b) => b.name).join(", ")}.` : ""} Say "let them in" or "keep it closed".`
         : d.lastRing
-          ? `The last ring was ${ago! < 120 ? `${ago} seconds` : `at ${time(d.lastRing, tz)}`} ago; nothing is waiting for you.`
+          ? `The last ring was ${ago! < 120 ? `${ago} seconds ago` : `at ${time(d.lastRing, tz)}`}. Nothing is waiting for you.`
           : "Nobody has rung today.";
       return { content: [{ type: "text", text }], structuredContent: d };
     },

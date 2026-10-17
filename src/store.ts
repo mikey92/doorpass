@@ -38,12 +38,18 @@ export function demoState(now: number, doorDeviceId: string, tz = "America/Los_A
     { id: "sam", name: "Sam Ortiz", status: "expired", passToken: token(), plan: "Monthly · lapsed Oct 1" },
     { id: "priya", name: "Priya Nair", status: "active", passToken: token(), plan: "Monthly · unlimited" },
   );
+  rollDemoBookings(s, now);
+  return s;
+}
+
+/** Demo bookings are relative to "now", so a judge opening the live site days later still sees Maya booked. */
+export function rollDemoBookings(s: GateState, now: number) {
+  if (s.site.id !== "night-owl") return;
   const at = (m: number) => now + m * MIN;
-  s.bookings.push(
+  s.bookings = [
     { id: "b-maya", memberId: "maya", start: at(-5), end: at(115), room: "Room 2 · drums" },
     { id: "b-jordan", memberId: "jordan", start: at(90), end: at(150), room: "Room 1 · piano" },
     { id: "b-sam", memberId: "sam", start: at(-5), end: at(55), room: "Room 3 · guitar" },
     { id: "b-priya", memberId: "priya", start: at(240), end: at(360), room: "Room 2 · drums" },
-  );
-  return s;
+  ];
 }

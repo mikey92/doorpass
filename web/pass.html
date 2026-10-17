@@ -3,54 +3,137 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1220">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>DoorPass</title>
-<link rel="stylesheet" href="/styles.css">
+<style>
+/* Apple HIG: system font, system colors, large title, 44 pt+ targets, one primary action, light & dark. */
+:root {
+  --bg: #f2f2f7; --card: #ffffff; --label: #000000; --secondary: rgba(60,60,67,.6); --separator: rgba(60,60,67,.18);
+  --green: #34c759; --green-ink: #248a3d; --red: #ff3b30; --orange: #ff9500; --blue: #007aff; --fill: rgba(120,120,128,.12);
+  --pass-a: #1c3d2f; --pass-b: #0e2219;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #000000; --card: #1c1c1e; --label: #ffffff; --secondary: rgba(235,235,245,.6); --separator: rgba(84,84,88,.6);
+    --green: #30d158; --green-ink: #30d158; --red: #ff453a; --orange: #ff9f0a; --blue: #0a84ff; --fill: rgba(120,120,128,.24); }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--label); font: 17px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 430px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); min-height: 100vh; display: flex; flex-direction: column; }
+.eyebrow { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--secondary); margin-top: 12px; }
+h1 { font: 700 34px/1.12 -apple-system, "SF Pro Display", system-ui, sans-serif; letter-spacing: .01em; margin: 2px 0 18px; }
+
+/* Wallet-style pass */
+.pass { position: relative; border-radius: 20px; padding: 20px; color: #fff; background: linear-gradient(155deg, var(--pass-a), var(--pass-b)); box-shadow: 0 10px 30px rgba(0,0,0,.18); overflow: hidden; }
+.pass::after { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(52,199,89,.35), transparent 70%); }
+.pass .top { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; opacity: .85; }
+.pass .room { font: 700 26px/1.15 -apple-system, "SF Pro Display", system-ui; margin-top: 22px; }
+.pass .time { font-size: 17px; margin-top: 4px; color: #a7f3c0; font-variant-numeric: tabular-nums; }
+.pass .row { display: flex; gap: 24px; margin-top: 18px; font-size: 13px; }
+.pass .row b { display: block; font-size: 15px; font-weight: 600; margin-top: 2px; }
+.pass .row span { opacity: .7; }
+.live { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px; background: rgba(52,199,89,.22); color: #a7f3c0; font-size: 12px; font-weight: 600; }
+.live i { width: 7px; height: 7px; border-radius: 50%; background: #34c759; }
+.off { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); } .off i { background: rgba(255,255,255,.5); }
+
+/* Steps: what the door needs */
+.steps { margin-top: 18px; background: var(--card); border-radius: 14px; overflow: hidden; }
+.step { display: flex; align-items: center; gap: 12px; padding: 13px 16px; min-height: 52px; }
+.step { position: relative; }
+.step + .step::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; border-top: .5px solid var(--separator); }
+.ic { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--fill); color: var(--secondary); }
+.step.done .ic { background: var(--green); color: #fff; }
+.step .t { flex: 1; } .step .t small { display: block; color: var(--secondary); font-size: 13px; }
+
+.spacer { flex: 1; min-height: 20px; }
+.status { text-align: center; font-size: 15px; color: var(--secondary); min-height: 44px; margin: 14px 4px; display: flex; align-items: center; justify-content: center; }
+.status.ok { color: var(--green-ink); font-weight: 600; font-size: 20px; } .status.no { color: var(--red); } .status.wait { color: var(--label); }
+.btn { width: 100%; min-height: 56px; border: 0; border-radius: 14px; font: 600 17px -apple-system, system-ui; background: var(--blue); color: #fff; transition: transform .12s, opacity .2s; }
+.btn:active { transform: scale(.98); } .btn:disabled { opacity: .45; }
+.btn.open { background: var(--green); }
+.fine { text-align: center; font-size: 13px; color: var(--secondary); margin-top: 12px; }
+.unlocked { animation: glow 1.2s ease; } @keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(52,199,89,.7); } 100% { box-shadow: 0 0 0 26px rgba(52,199,89,0); } }
+</style>
 </head>
-<body class="pass-body">
-<main class="pass">
-  <div class="site" id="site">DoorPass</div>
+<body>
+<main>
+  <div class="eyebrow" id="site">DoorPass</div>
   <h1 id="name">Your pass</h1>
-  <div class="ticket">
+
+  <div class="pass" id="pass">
+    <div class="top"><span>MEMBER PASS</span><span class="live off" id="live"><i></i><span id="live-t">Not now</span></span></div>
     <div class="room" id="room">—</div>
-    <div class="when" id="when"></div>
-    <div class="plan" id="plan"></div>
+    <div class="time" id="when"></div>
+    <div class="row"><div><span>Plan</span><b id="plan">—</b></div><div><span>Door</span><b id="door">Front door</b></div></div>
   </div>
-  <button class="open-btn" id="open">I'm at the door</button>
-  <div class="status" id="status">Press the doorbell and tap the button, in either order.</div>
-  <p class="how">The door opens when three things line up: you're booked for now, you pressed the Ring doorbell at the door, and you tapped this pass within a minute of it. No codes to share.</p>
+
+  <div class="steps" aria-label="What opens the door">
+    <div class="step" id="s-book"><div class="ic"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg></div><div class="t">Booked for now<small id="s-book-t">Checking…</small></div></div>
+    <div class="step" id="s-tap"><div class="ic"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg></div><div class="t">Tap below<small>Proves it's you</small></div></div>
+    <div class="step" id="s-bell"><div class="ic"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg></div><div class="t">Press the doorbell<small>Proves you're at the door · either order, within a minute</small></div></div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <button class="btn" id="open">I'm at the door</button>
+  <div class="fine">No codes to share. Nothing is recorded but the door's log.</div>
 </main>
 <script type="module">
 const token = location.pathname.split("/").pop();
 const $ = (s) => document.querySelector(s);
-let TZ;
+let TZ, waitTimer;
 const tm = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
-let waiting = false;
+const step = (id, on) => $(id).classList.toggle("done", !!on);
+function status(kind, text) { const s = $("#status"); s.className = "status " + kind; s.textContent = text; }
+
+function opened() {
+  step("#s-tap", 1); step("#s-bell", 1);
+  status("ok", "Door open — come in");
+  $("#open").classList.add("open"); $("#open").textContent = "Unlocked · locks again in 10 s";
+  $("#pass").classList.add("unlocked");
+  if (navigator.vibrate) navigator.vibrate(60);
+  setTimeout(() => { $("#open").classList.remove("open"); $("#open").textContent = "I'm at the door"; $("#pass").classList.remove("unlocked"); step("#s-tap", 0); step("#s-bell", 0); status("", ""); }, 10_000);
+}
 
 async function load() {
   const r = await fetch(`/api/pass/${token}`);
-  if (!r.ok) { $("#name").textContent = "This pass isn't valid"; $("#open").disabled = true; return; }
+  if (!r.ok) { $("#name").textContent = "Pass not valid"; $("#open").disabled = true; return null; }
   const d = await r.json();
   TZ = d.tz;
   $("#site").textContent = d.site;
-  $("#name").textContent = d.member.name;
-  $("#plan").textContent = d.member.plan + (d.member.status !== "active" ? ` · membership ${d.member.status}` : "");
-  if (d.booking) { $("#room").textContent = d.booking.room; $("#when").textContent = `${tm(d.booking.start)} – ${tm(d.booking.end)}${d.booking.live ? " · now" : ""}`; }
+  $("#name").textContent = d.member.name.split(" ")[0];
+  $("#plan").textContent = d.member.plan.split(" · ")[0];
+  const live = !!d.booking?.live && d.member.status === "active";
+  if (d.booking) { $("#room").textContent = d.booking.room; $("#when").textContent = `${tm(d.booking.start)} – ${tm(d.booking.end)}`; }
   else { $("#room").textContent = "No booking today"; $("#when").textContent = ""; }
-  if (waiting && d.last?.kind === "open") status("ok", "Door open. Come in! It locks again in 10 seconds.");
+  $("#live").className = "live" + (live ? "" : " off");
+  $("#live-t").textContent = live ? "Now" : d.member.status !== "active" ? `Membership ${d.member.status}` : "Not now";
+  step("#s-book", live);
+  $("#s-book-t").textContent = live ? `${d.booking.room.split(" · ")[0]} until ${tm(d.booking.end)}` : d.member.status !== "active" ? `Membership ${d.member.status}` : d.booking ? `Opens 10 min before ${tm(d.booking.start)}` : "No booking";
+  return d;
 }
-function status(kind, text) { const s = $("#status"); s.className = "status " + kind; s.textContent = text; }
 
 $("#open").onclick = async () => {
   $("#open").disabled = true;
   const o = await (await fetch(`/api/pass/${token}/tap`, { method: "POST" })).json();
-  if (o.action === "open") status("ok", "Door open. Come in! It locks again in 10 seconds.");
-  else if (o.action === "wait-ring") { waiting = true; status("wait", "Now press the doorbell. You have 60 seconds."); setTimeout(() => { waiting = false; }, 60_000); }
-  else status("no", o.reason || "The door can't open right now.");
-  setTimeout(() => ($("#open").disabled = false), 3000);
+  if (o.action === "open") opened();
+  else if (o.action === "wait-ring") {
+    step("#s-tap", 1);
+    let left = 60;
+    status("wait", `Now press the doorbell · ${left}s`);
+    clearInterval(waitTimer);
+    waitTimer = setInterval(() => { left--; if (left <= 0) { clearInterval(waitTimer); step("#s-tap", 0); status("", "Took too long. Tap again."); } else if (!$("#open").classList.contains("open")) status("wait", `Now press the doorbell · ${left}s`); }, 1000);
+  } else status("no", o.reason || "The door can't open right now.");
+  setTimeout(() => ($("#open").disabled = false), 2500);
 };
-load();
-new EventSource("/api/stream").addEventListener("log", (e) => { const l = JSON.parse(e.data); if (waiting && l.kind === "open") load(); });
+
+await load();
+new EventSource("/api/stream").addEventListener("log", (e) => {
+  const l = JSON.parse(e.data);
+  if (l.kind === "open" && $("#s-tap").classList.contains("done") && !$("#open").classList.contains("open")) { clearInterval(waitTimer); opened(); }
+});
 </script>
 </body>
 </html>
