@@ -89,7 +89,19 @@ async function token(): Promise<string> {
   return (await linker?.token().catch(() => undefined)) ?? playgroundToken() ?? "";
 }
 const ring = new RingClient(token, undefined, loggedFetch);
-const ringStatus = { connected: false, via: "" as "" | "linked account" | "playground", device: null as null | { id: string; name: string; online: boolean }, error: "" };
+const ringStatus = { connected: false, via: "" as "" | "linked account" | "playground", device: null as null | { id: string; name: string; online: boolean }, error: "", history: null as null | { at: number; dings: number; matched: number } };
+
+// Every minute, check Ring's event history against the webhooks we got, so a dropped webhook can't go unnoticed.
+async function reconcileHistory() {
+  if (!ringStatus.connected || !ringStatus.device) return;
+  try {
+    const events = await ring.history(ringStatus.device.id, 20);
+    const r = await gate.reconcile(events, Date.now());
+    ringStatus.history = { at: Date.now(), ...r };
+  } catch {
+    /* history is a cross-check; the webhook path keeps working without it */
+  }
+}
 
 const store = new Store(DATA, () => demoState(Date.now(), SIM_DOOR, TZ));
 const gate = new Gate(store.state, lock);
@@ -471,7 +483,9 @@ createServer((req, res) =>
   }, 2_000);
   setInterval(async () => {
     await connectRing();
+    await reconcileHistory();
     push("state", null);
   }, 60_000);
+  void reconcileHistory().then(() => push("state", null));
   void time;
 });

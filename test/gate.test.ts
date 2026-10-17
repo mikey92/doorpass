@@ -195,3 +195,22 @@ test("a lock that's offline: pass + doorbell still leave the door shut, logged f
   assert.equal(err.memberId, "maya");
   assert.match(err.text, /Door stays closed/);
 });
+
+test("Ring history check: a press that arrived by webhook matches; a missed recent one is handled; an old one is only logged", async (t) => {
+  const { g } = setup();
+  t.after(() => g.stopTimers());
+  const now = T0 + 10 * MIN;
+  await g.ring({ id: "wh1", deviceId: "door", at: now - 5 * MIN }, now - 5 * MIN);
+  const events = [
+    { id: "h1", type: "ding", timestamp: now - 5 * MIN + 600, deviceId: "door" }, // same press as wh1
+    { id: "h2", type: "ding", timestamp: now - 30_000, deviceId: "door" }, // missed, recent
+    { id: "h3", type: "ding", timestamp: now - 20 * MIN, deviceId: "door" }, // missed, old
+    { id: "h4", type: "motion", timestamp: now - 10_000, deviceId: "door" },
+  ];
+  const r = await g.reconcile(events, now);
+  assert.deepEqual(r, { dings: 3, matched: 1 });
+  assert.ok(g.s.rings.some((x) => x.id === "history:h2"), "the recent missed press is handled like a doorbell press");
+  assert.equal(g.s.log.filter((l) => l.flags?.includes("missed webhook")).length, 2);
+  await g.reconcile(events, now + 60_000);
+  assert.equal(g.s.log.filter((l) => l.flags?.includes("missed webhook")).length, 2, "each missed press is reported once");
+});

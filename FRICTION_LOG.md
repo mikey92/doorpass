@@ -96,10 +96,10 @@ Severity: **high** blocks the build, **medium** costs real time or forces a work
 - **Task:** attach Ring's photo of whoever pressed the doorbell to the manager's request.
 - **Steps:** on `button_press`, `POST media/image/download` with `type: at_timestamp` and the event's timestamp; follow the 303 to the pre-signed URL.
 - **Expected:** the frame, labelled with the current app name; a "processing" signal while it isn't ready.
-- **Actual:** works with the linked account (640×360 JPEG), but the frame is watermarked `Partner: CareBell`, the app's original name, after renaming it to DoorPass. Asking right after the press returns `416 MEDIA_NOT_FOUND`, the same answer as for a moment with no recording.
+- **Actual:** works with the linked account (640×360 JPEG), but the frame is watermarked `Partner: CareBell`, the app's original name. Renaming the app to DoorPass under App information says "App information saved successfully", yet the Private Apps list and the watermark keep the old name. Asking right after the press returns `416 MEDIA_NOT_FOUND`, the same answer as for a moment with no recording.
 - **Severity:** low.
 - **Workaround:** retry at 2, 6, 12 and 22 s after the press; the photo usually arrives on the first or second try.
-- **Suggestion:** take the watermark from the current app name; return a distinct status (or `Retry-After`) while media for a recent event is still processing.
+- **Suggestion:** apply a saved app name everywhere (app list, watermark), or say that the name is fixed after creation; return a distinct status (or `Retry-After`) while media for a recent event is still processing.
 
 ## 10. Amazon Bedrock: first call after sign-up says the account is being verified
 - **Task:** call Amazon Nova through the Converse API from a new AWS account.

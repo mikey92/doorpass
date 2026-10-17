@@ -86,6 +86,8 @@ function render(s) {
         return `<div class="row ic-row${fresh ? " new" : ""}"><div class="glyph g-${esc(l.kind)}" title="${esc(l.kind)}">${GLYPH[l.kind] ?? "•"}</div><div class="main">${esc(l.text)}${flags}${ev ? `<div class="ev">${ev}</div>` : ""}${photo ? `<a href="${photo}" target="_blank" rel="noopener"><img class="log-snap" src="${photo}" alt="Ring photo"></a>${S.notes?.[l.ringId] ? `<div class="note">${esc(S.notes[l.ringId])}</div>` : ""}` : ""}</div><time>${tms(l.at)}</time></div>`;
       })
       .join("") || `<div class="row"><div class="main muted">Nothing yet tonight</div></div>`;
+  const h = r.history;
+  $("#api-sub").textContent = !h ? "live API calls · secrets hidden" : h.dings ? `Ring history check: ${h.matched}/${h.dings} doorbell presses this hour came by webhook` : "Ring history check: no doorbell presses this hour";
   $("#api").innerHTML = r.log.slice().reverse().map((a) => `<li><time>${tms(a.at)}</time> <b>${esc(a.method)}</b> ${esc(a.path)} → ${esc(a.status)} <span class="muted">${esc(a.ms)} ms</span></li>`).join("") || "<li class=\"muted\">No calls yet</li>";
 }
 

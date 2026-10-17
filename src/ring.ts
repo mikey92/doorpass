@@ -70,14 +70,17 @@ export class RingClient {
     return (await this.get(`/v1/devices/${encodeURIComponent(deviceId)}/capabilities`)).data?.attributes;
   }
 
-  /** Event history: the polling alternative to webhooks. */
-  async history(deviceId: string): Promise<HistoryEvent[]> {
-    const j = await this.get(`/v1/history/devices/${encodeURIComponent(deviceId)}/events`);
+  /**
+   * Event history: the polling alternative to webhooks. A real device returns
+   * `{ type: "history-events", attributes: { event_type: "ding" | "motion" | "on_demand", start, end } }`.
+   */
+  async history(deviceId: string, limit = 20): Promise<HistoryEvent[]> {
+    const j = await this.get(`/v1/history/devices/${encodeURIComponent(deviceId)}/events?limit=${limit}`);
     return (j.data ?? []).map((e: any) => ({
       id: e.id,
       type: e.attributes?.event_type ?? e.type,
       subType: e.attributes?.sub_type,
-      timestamp: e.attributes?.timestamp ?? Date.parse(e.attributes?.created_at ?? ""),
+      timestamp: e.attributes?.start ?? e.attributes?.timestamp ?? Date.parse(e.attributes?.created_at ?? ""),
       deviceId,
     }));
   }

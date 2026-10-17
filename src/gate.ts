@@ -67,6 +67,10 @@ export interface GateState {
 }
 
 export const RULES = {
+  /** A history event and a webhook within this of each other are the same doorbell press. */
+  historyMatchMs: 5_000,
+  /** A press found only in the history is still acted on if it is this recent. */
+  historyActMs: 90_000,
   /** A doorbell press and a pass tap pair up if they're this close together. */
   pairMs: 60 * SEC,
   /** A booking opens the door this early. */
@@ -309,6 +313,32 @@ export class Gate {
   stopTimers() {
     clearTimeout(this.relockTimer);
     this.openGen++;
+  }
+
+  /**
+   * Cross-checks Ring's event history against the doorbell webhooks we received. A press in the history with
+   * no matching webhook was missed (network, retries exhausted): if it is recent enough it is handled now,
+   * otherwise it is only logged, since the visitor has likely left.
+   */
+  async reconcile(events: { id: string; type: string; timestamp: number; deviceId: string }[], now: number) {
+    const dings = events.filter((e) => e.type === "ding" && e.deviceId === this.s.site.doorDeviceId && now - e.timestamp <= 3_600_000);
+    let matched = 0;
+    for (const e of dings) {
+      if (this.s.rings.some((r) => Math.abs(r.at - e.timestamp) <= RULES.historyMatchMs)) {
+        matched++;
+        continue;
+      }
+      const key = `history:${e.id}`;
+      if (this.s.seen.includes(key)) continue;
+      if (now - e.timestamp <= RULES.historyActMs) {
+        this.log(now, { kind: "ring", flags: ["missed webhook"], text: `Ring's event history shows a doorbell press at ${time(e.timestamp, this.s.site.tz)} that never arrived as a webhook. Handling it now.` });
+        await this.ring({ id: key, deviceId: e.deviceId, at: e.timestamp }, now);
+      } else {
+        this.s.seen.push(key);
+        this.log(now, { kind: "notify", flags: ["missed webhook"], text: `Ring's event history shows a doorbell press at ${time(e.timestamp, this.s.site.tz)} that never arrived as a webhook. Too late to act on; logged only.` });
+      }
+    }
+    return { dings: dings.length, matched };
   }
 
   /** After a restart the re-lock timer is gone: if the lock was left open, lock it. */
