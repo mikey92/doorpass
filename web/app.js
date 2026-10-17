@@ -37,6 +37,9 @@ function render(s) {
   const lat = lastOpen?.latencyMs;
   $("#latency").hidden = lat == null;
   if (lat != null) $("#latency-v").textContent = `${(lat / 1000).toFixed(1)} s`;
+  const conf = lastOpen ? s.log.find((l) => l.kind === "confirm" && l.ringId === lastOpen.ringId) : null;
+  $("#confirm").hidden = !conf;
+  if (conf) $("#confirm-v").textContent = `${(conf.latencyMs / 1000).toFixed(1)} s`;
 
   const req = s.requests[0];
   $("#request").innerHTML = req

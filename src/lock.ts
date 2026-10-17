@@ -9,6 +9,10 @@ export type LockState = "locked" | "unlocked" | "jammed" | "unknown";
 export interface Lock {
   kind: "switchbot" | "simulated";
   name: string;
+  /** Sends the command; resolves when the lock's cloud has accepted it, throws if it refused. */
+  request(cmd: "lock" | "unlock"): Promise<void>;
+  /** Waits for the lock to report the state (its cloud reports a few seconds late). */
+  confirm(want: LockState): Promise<LockState>;
   unlock(): Promise<LockState>;
   lock(): Promise<LockState>;
   state(): Promise<LockState>;
@@ -24,6 +28,13 @@ export class SimulatedLock implements Lock {
   }
   private wait() {
     return new Promise((r) => setTimeout(r, this.delayMs));
+  }
+  async request(cmd: "lock" | "unlock") {
+    await this.wait();
+    this.s = cmd === "unlock" ? "unlocked" : "locked";
+  }
+  async confirm(_want: LockState) {
+    return this.s;
   }
   async unlock() {
     await this.wait();
@@ -76,6 +87,13 @@ export class SwitchBotLock implements Lock {
     const r = await fetchFn("https://api.switch-bot.com/v1.1/devices", { headers: switchbotHeaders(token, secret) });
     const j = await r.json();
     return (j.body?.deviceList ?? []).filter((d: any) => /lock/i.test(d.deviceType ?? "")).map((d: any) => ({ id: d.deviceId as string, name: d.deviceName as string, type: d.deviceType as string }));
+  }
+
+  async request(cmd: "lock" | "unlock") {
+    await this.command(cmd);
+  }
+  async confirm(want: LockState) {
+    return this.settle(want);
   }
 
   private async command(command: "lock" | "unlock") {

@@ -49,7 +49,7 @@ input { font: inherit; padding: 9px 11px; border: 1px solid var(--line); border-
 .log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .log time { color: var(--mute); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
 .log .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
-.k-open { color: var(--green); } .k-deny, .k-expire, .k-lock-error { color: var(--red); } .k-request { color: var(--amber); } .k-relock, .k-ring, .k-pass, .k-notify, .k-enter, .k-approve { color: var(--mute); }
+.k-open, .k-confirm { color: var(--green); } .k-deny, .k-expire, .k-lock-error { color: var(--red); } .k-request { color: var(--amber); } .k-relock, .k-ring, .k-pass, .k-notify, .k-enter, .k-approve { color: var(--mute); }
 .ev { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; } .ev span { font: 11px ui-monospace, Menlo, monospace; background: #f3f4f6; padding: 1px 6px; border-radius: 6px; color: var(--mute); }
 .flag { color: var(--amber); font-weight: 600; font-size: 13px; }
 .log li.new { animation: pop .7s ease; } @keyframes pop { from { background: #fef9c3; } }
@@ -85,3 +85,4 @@ input { font: inherit; padding: 9px 11px; border: 1px solid var(--line); border-
 .primary { background: var(--ink); color: #fff; border-color: var(--ink); padding: 10px; } .warn { color: var(--red); }
 
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+.latency.sub2 { border-top: 0; margin-top: 4px; padding-top: 0; } .latency.sub2 b { font-size: 15px; color: var(--mute); }

@@ -28,7 +28,7 @@ test("doorbell, then pass tap within a minute: the lock opens by itself", async 
   const o = await g.tap("p-maya", T0 + MIN + 20_000);
   assert.equal(o.action, "open");
   assert.equal(lock.s, "unlocked");
-  assert.match(g.s.log.at(-1)!.text, /Door opened for Maya \(Room 2/);
+  assert.match(g.s.log.findLast((l) => l.kind === "open")!.text, /Door opened for Maya \(Room 2/);
   assert.equal(g.s.requests.at(-1)!.status, "approved", "the manager request for that ring is settled");
 });
 
@@ -110,13 +110,13 @@ test("two people walking in after one opening is flagged", async (t) => {
 test("a lock that doesn't respond keeps the door closed and says so", async (t) => {
   const { g, lock } = setup();
   t.after(() => g.stopTimers());
-  lock.unlock = async () => {
+  lock.request = async () => {
     throw new Error("offline");
   };
   await g.tap("p-maya", T0);
   const o = await g.ring(ring(T0 + 1000));
   assert.equal(o.action, "deny");
-  assert.equal(g.s.log.at(-1)!.kind, "lock-error");
+  assert.ok(g.s.log.some((l) => l.kind === "lock-error"));
 });
 
 test("one pass tap opens the door once; the next ring goes to the manager", async (t) => {
@@ -125,4 +125,14 @@ test("one pass tap opens the door once; the next ring goes to the manager", asyn
   await g.tap("p-maya", T0);
   assert.equal((await g.ring(ring(T0 + 1000))).action, "open");
   assert.equal((await g.ring(ring(T0 + 20_000))).action, "wait-pass");
+});
+
+test("the door opens on the lock's acknowledgement; its confirmation is logged after", async (t) => {
+  const { g } = setup();
+  t.after(() => g.stopTimers());
+  await g.tap("p-maya", T0);
+  await g.ring(ring(T0 + 1000));
+  await new Promise((r) => setTimeout(r, 5));
+  const kinds = g.s.log.map((l) => l.kind);
+  assert.ok(kinds.indexOf("open") < kinds.indexOf("confirm"));
 });

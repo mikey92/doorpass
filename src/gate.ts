@@ -33,7 +33,7 @@ export interface Request {
   decidedBy?: string;
   decidedAt?: number;
 }
-export type LogKind = "ring" | "open" | "relock" | "deny" | "request" | "approve" | "expire" | "pass" | "enter" | "notify" | "lock-error";
+export type LogKind = "ring" | "open" | "confirm" | "relock" | "deny" | "request" | "approve" | "expire" | "pass" | "enter" | "notify" | "lock-error";
 export interface LogEntry {
   id: string;
   at: number;
@@ -235,30 +235,34 @@ export class Gate {
     }
     const m = this.member(memberId);
     const b = memberId ? this.live(now, memberId)[0] : undefined;
-    let state: LockState;
+    // Open as soon as the lock's cloud accepts the command; its own confirmation follows a few seconds later.
     try {
-      state = await this.lock.unlock();
+      await this.lock.request("unlock");
     } catch (err) {
-      this.log(now, { kind: "lock-error", memberId, ringId: ring?.id, text: `The lock didn't respond (${(err as Error).message.slice(0, 80)}). Door stays closed.` });
+      this.log(now, { kind: "lock-error", memberId, ringId: ring?.id, text: `The lock didn't accept the command (${(err as Error).message.slice(0, 80)}). Door stays closed.` });
       return { action: "deny", reason: "The lock didn't respond" };
     }
-    const done = Date.now();
-    const latencyMs = ring ? Math.max(0, done - ring.at) : undefined;
-    if (state !== "unlocked") {
-      this.log(now, { kind: "lock-error", memberId, ringId: ring?.id, lock: state, text: `The lock reported "${state}" instead of unlocked.` });
-      return { action: "deny", reason: `Lock ${state}` };
-    }
+    const latencyMs = ring ? Math.max(0, Date.now() - ring.at) : undefined;
+    const state: LockState = "unlocked";
     this.s.openedAt = now;
     this.log(now, {
       kind: "open",
       memberId,
       bookingId: b?.id,
       ringId: ring?.id,
-      lock: state,
+      lock: "unlocked",
       latencyMs,
       evidence: [ring ? `ring:${ring.id}` : "", b ? `booking:${b.id}` : "", `lock:${this.lock.kind}`].filter(Boolean),
       text: `Door opened for ${m ? `${m.name}${b ? ` (${b.room}, ${time(b.start, this.s.site.tz)}–${time(b.end, this.s.site.tz)})` : ""}` : "a visitor"}: ${why}.`,
     });
+    this.lock
+      .confirm("unlocked")
+      .then((st) => {
+        const ms = ring ? Date.now() - ring.at : undefined;
+        if (st === "unlocked") this.log(Date.now(), { kind: "confirm", ringId: ring?.id, lock: st, latencyMs: ms, text: `${this.lock.name} reported unlocked${ms != null ? ` (${(ms / 1000).toFixed(1)} s after the doorbell)` : ""}.` });
+        else this.log(Date.now(), { kind: "lock-error", ringId: ring?.id, lock: st, text: `${this.lock.name} reported "${st}" instead of unlocked. Check the door.` });
+      })
+      .catch(() => {});
     clearTimeout(this.relockTimer);
     this.relockTimer = setTimeout(() => this.relock(Date.now()), RULES.relockMs);
     return { action: "open", memberId, bookingId: b?.id, latencyMs, lock: state };

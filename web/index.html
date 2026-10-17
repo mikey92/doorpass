@@ -26,7 +26,8 @@
     <div class="panel door" id="door">
       <div class="door-state"><span class="big" id="door-state">Locked</span><span class="muted" id="door-sub"></span></div>
       <div id="request"></div>
-      <div class="latency" id="latency" hidden><span>Doorbell → lock open</span><b id="latency-v"></b></div>
+      <div class="latency" id="latency" hidden><span>Doorbell → lock accepts</span><b id="latency-v"></b></div>
+      <div class="latency sub2" id="confirm" hidden><span>Lock reports unlocked</span><b id="confirm-v"></b></div>
     </div>
     <div class="panel">
       <h2>How the door decides</h2>
