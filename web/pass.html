@@ -37,14 +37,14 @@ async function load() {
   $("#plan").textContent = d.member.plan + (d.member.status !== "active" ? ` · membership ${d.member.status}` : "");
   if (d.booking) { $("#room").textContent = d.booking.room; $("#when").textContent = `${tm(d.booking.start)} – ${tm(d.booking.end)}${d.booking.live ? " · now" : ""}`; }
   else { $("#room").textContent = "No booking today"; $("#when").textContent = ""; }
-  if (waiting && d.last?.kind === "open") status("ok", "Door open. Come in! It locks again in 8 seconds.");
+  if (waiting && d.last?.kind === "open") status("ok", "Door open. Come in! It locks again in 10 seconds.");
 }
 function status(kind, text) { const s = $("#status"); s.className = "status " + kind; s.textContent = text; }
 
 $("#open").onclick = async () => {
   $("#open").disabled = true;
   const o = await (await fetch(`/api/pass/${token}/tap`, { method: "POST" })).json();
-  if (o.action === "open") status("ok", "Door open. Come in! It locks again in 8 seconds.");
+  if (o.action === "open") status("ok", "Door open. Come in! It locks again in 10 seconds.");
   else if (o.action === "wait-ring") { waiting = true; status("wait", "Now press the doorbell. You have 60 seconds."); setTimeout(() => { waiting = false; }, 60_000); }
   else status("no", o.reason || "The door can't open right now.");
   setTimeout(() => ($("#open").disabled = false), 3000);

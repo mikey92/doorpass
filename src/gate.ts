@@ -70,7 +70,7 @@ export const RULES = {
   /** A manager request left unanswered closes. */
   requestMs: 90 * SEC,
   /** The lock turns back after this long. */
-  relockMs: 8 * SEC,
+  relockMs: 10 * SEC,
   /** Human motion this soon after opening is someone walking in. */
   enterMs: 30 * SEC,
 };

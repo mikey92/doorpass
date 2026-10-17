@@ -99,13 +99,21 @@ export class SwitchBotLock implements Lock {
     await this.command("lock");
     return this.settle("locked");
   }
+  /** The cloud reports the new state a few seconds late ("locked" → "unlocking" → "unlocked"); "unlocking"/"locking" means the motor is turning. */
   private async settle(want: LockState): Promise<LockState> {
-    let s: LockState = "unknown";
-    for (let i = 0; i < 6; i++) {
-      await new Promise((r) => setTimeout(r, 700));
-      s = await this.state().catch(() => "unknown" as LockState);
+    let last = "";
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 600));
+      last = await this.raw().catch(() => "");
+      const s = STATE[last] ?? "unknown";
       if (s === want || s === "jammed") return s;
+      // The motor is turning toward the wanted state: good enough to call it, the next poll would confirm.
+      if ((want === "unlocked" && last === "unlocking") || (want === "locked" && last === "locking")) return want;
     }
-    return s;
+    return STATE[last] ?? "unknown";
+  }
+  private async raw(): Promise<string> {
+    const b = await this.call(`/devices/${encodeURIComponent(this.deviceId)}/status`);
+    return String(b.lockState ?? "").toLowerCase();
   }
 }
