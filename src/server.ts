@@ -39,7 +39,13 @@ function localSecret(name: string): string {
   return readFileSync(f, "utf8").trim();
 }
 
-const creds = readCredentials(process.env.RING_CREDENTIALS_FILE ?? join(HOME, ".config/ring-hack/carebell_app_credentials.csv"));
+/**
+ * Sandbox for judges (DOORPASS_SANDBOX=1): simulated doorbell and lock, separate data, and everyone may use
+ * the manager controls. It never talks to the real Ring account or the real lock.
+ */
+const SANDBOX = process.env.DOORPASS_SANDBOX === "1";
+
+const creds = SANDBOX ? undefined : readCredentials(process.env.RING_CREDENTIALS_FILE ?? join(HOME, ".config/ring-hack/carebell_app_credentials.csv"));
 const KEY = creds?.hmacKey ?? process.env.RING_HMAC_KEY ?? localSecret("hmac.key");
 /** The manager's key: approvals, settings and the demo controls. The dashboard takes it as #key=… */
 const MANAGER_KEY = process.env.MANAGER_KEY ?? localSecret("manager.key");
@@ -58,6 +64,7 @@ const loggedFetch: typeof fetch = async (input, init) => {
 };
 
 function makeLock(): Lock {
+  if (SANDBOX) return new SimulatedLock();
   const f = process.env.SWITCHBOT_FILE ?? join(HOME, ".config/doorpass/switchbot.json");
   if (existsSync(f)) {
     try {
@@ -73,6 +80,7 @@ const lock = new OutageLock(makeLock());
 
 const linker = creds ? new Linker(creds, join(ROOT, "data/tokens.json"), loggedFetch) : undefined;
 function playgroundToken(): string | undefined {
+  if (SANDBOX) return undefined;
   if (process.env.RING_TOKEN) return process.env.RING_TOKEN;
   const f = process.env.RING_TOKEN_FILE ?? join(HOME, ".config/ring-hack/playground_token");
   return existsSync(f) ? readFileSync(f, "utf8").trim() : undefined;
@@ -189,6 +197,10 @@ async function grabSnapshot(ringId: string, deviceId: string, at: number) {
 }
 
 async function connectRing() {
+  if (SANDBOX) {
+    ringStatus.error = "simulated";
+    return;
+  }
   if (!(await token())) {
     ringStatus.connected = false;
     ringStatus.error = "no token";
@@ -234,6 +246,7 @@ const jsonBody = async (req: IncomingMessage) => {
 };
 const json = (res: ServerResponse, code: number, data: unknown) => res.writeHead(code, { "Content-Type": "application/json" }).end(JSON.stringify(data));
 const same = (a: string | undefined, b: string) => !!a && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const isMgr = (k: string | undefined) => SANDBOX || same(k, MANAGER_KEY);
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json" };
 
@@ -329,9 +342,9 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const msgs = (Array.isArray(raw) ? raw : [raw]) as { id?: unknown; method?: string; params?: { name?: string } }[];
     const writes = msgs.find((m) => m?.method === "tools/call" && WRITE_TOOLS.has(m.params?.name ?? ""));
     const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "") || (req.headers["x-manager-key"] as string | undefined);
-    if (writes && !same(auth, MANAGER_KEY)) return json(res, 403, { jsonrpc: "2.0", id: writes.id ?? null, error: { code: -32001, message: "Only the manager can open or refuse the door. Send the manager key." } });
+    if (writes && !isMgr(auth)) return json(res, 403, { jsonrpc: "2.0", id: writes.id ?? null, error: { code: -32001, message: "Only the manager can open or refuse the door. Send the manager key." } });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    const server = buildMcp(gate, Date.now, () => push("state", snapshot()), undefined, same(auth, MANAGER_KEY));
+    const server = buildMcp(gate, Date.now, () => push("state", snapshot()), undefined, isMgr(auth));
     res.on("close", () => {
       transport.close();
       server.close();
@@ -340,7 +353,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     return transport.handleRequest(req, res, raw);
   }
 
-  const isManager = same(url.searchParams.get("key") ?? (req.headers["x-manager-key"] as string | undefined), MANAGER_KEY);
+  const isManager = isMgr(url.searchParams.get("key") ?? (req.headers["x-manager-key"] as string | undefined));
   if (p === "/api/state") return json(res, 200, snapshot(isManager));
   if (req.method === "POST" && p === "/api/ask") {
     const key = bedrockKey();
@@ -353,7 +366,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     // Public visitors share a small hourly budget; the manager has a bigger one.
     const hour = Math.floor(Date.now() / 3_600_000);
     if (askLimit.at !== hour) Object.assign(askLimit, { at: hour, n: 0 });
-    if (++askLimit.n > (isManager ? 300 : 60)) return json(res, 429, { error: "Alexa is resting. Try again later." });
+    if (++askLimit.n > (SANDBOX ? 100 : isManager ? 300 : 60)) return json(res, 429, { error: "Alexa is resting. Try again later." });
     try {
       const a = await ask(said, selfMcp(isManager), bedrock(key, MODEL, undefined, loggedFetch), { canWrite: isManager });
       return json(res, 200, a);
@@ -394,7 +407,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
 
   // Manager actions and demo controls need the manager key.
   if (req.method === "POST" && (p.startsWith("/api/manage/") || p.startsWith("/api/demo/"))) {
-    if (!same(req.headers["x-manager-key"] as string | undefined, MANAGER_KEY)) return json(res, 403, { error: "manager key required" });
+    if (!isMgr(req.headers["x-manager-key"] as string | undefined)) return json(res, 403, { error: "manager key required" });
     const b = await jsonBody(req);
     if (p === "/api/manage/decide") {
       if (typeof b.requestId !== "string") return json(res, 400, { error: "requestId" });
@@ -427,6 +440,10 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     return json(res, 404, { error: "not found" });
   }
 
+  if (SANDBOX && (p === "/" || p === "/index.html")) {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    return res.end(readFileSync(join(WEB, "index.html"), "utf8").replace('<html lang="en">', '<html lang="en" data-sandbox="1">'));
+  }
   const file = normalize(join(WEB, p === "/" ? "index.html" : p));
   if (file.startsWith(WEB + sep) && existsSync(file)) {
     res.writeHead(200, { "Content-Type": TYPES[file.slice(file.lastIndexOf("."))] ?? "application/octet-stream" });

@@ -9,6 +9,9 @@ entered in Alexa+).
 
 **Live:** https://doorpass.snack-wrap.com (read-only without the manager key)
 
+
+**Try it without any hardware:** [doorpass-try.snack-wrap.com](https://doorpass-try.snack-wrap.com) is a sandbox with a simulated doorbell and lock where every control is open: press the doorbell, open a member's pass, ask Alexa (Amazon Bedrock) to let someone in. The real door runs at [doorpass.snack-wrap.com](https://doorpass.snack-wrap.com) (read-only without the manager key).
+
 ## How the door decides
 
 | Fact | Comes from | Why it's needed |

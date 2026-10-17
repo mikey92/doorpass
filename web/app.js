@@ -6,7 +6,9 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 let TZ;
 const tm = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
 const tms = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", timeZone: TZ });
-const KEY = new URLSearchParams(location.hash.slice(1)).get("key") ?? "";
+const SANDBOX = document.documentElement.dataset.sandbox === "1";
+// In the judges' sandbox every visitor gets the manager controls (the server accepts any key there).
+const KEY = new URLSearchParams(location.hash.slice(1)).get("key") ?? (SANDBOX ? "sandbox" : "");
 let S = null;
 const seen = new Set();
 
@@ -31,7 +33,7 @@ function render(s) {
   TZ = s.tz;
   $("#site").textContent = s.site.name;
   const r = s.ring;
-  $("#ring-chip").className = "chip" + (r.connected ? " on" : "");
+  $("#ring-chip").className = "chip" + (r.connected ? " on" : r.error === "simulated" ? " sim" : "");
   $("#ring-text").textContent = r.connected ? `Ring · ${r.device.name}` : `Ring · ${/401/.test(r.error) ? "token expired" : r.error || "not connected"}`;
   $("#lock-chip").className = "chip " + (s.lock.offline ? "" : s.lock.kind === "switchbot" ? "on" : "sim");
   $("#lock-text").textContent = (s.lock.kind === "switchbot" ? s.lock.name : "Simulated lock") + (s.lock.offline ? " · offline" : "");
@@ -44,8 +46,10 @@ function render(s) {
   $("#door-state").textContent = open ? "Open" : "Locked";
   const lastOpen = [...s.log].reverse().find((l) => l.kind === "open");
   $("#door-sub").textContent = lastOpen ? `Last opened ${tm(lastOpen.at)}` : s.staffed ? "Staff on site · the doorbell only announces" : "Runs itself · nobody at the desk";
-  const lat = lastOpen?.latencyMs;
-  const conf = lastOpen ? s.log.find((l) => l.kind === "confirm" && l.ringId === lastOpen.ringId) : null;
+  // Timings come from the last opening the doorbell itself caused (a manager's approval has no doorbell timing).
+  const timedOpen = [...s.log].reverse().find((l) => l.kind === "open" && l.latencyMs != null);
+  const lat = timedOpen?.latencyMs;
+  const conf = timedOpen ? s.log.find((l) => l.kind === "confirm" && l.ringId === timedOpen.ringId && l.latencyMs != null) : null;
   $("#metrics").hidden = lat == null && !conf;
   $("#latency-v").textContent = lat != null ? sec(lat) : "—";
   $("#confirm-v").textContent = conf ? sec(conf.latencyMs) : "—";
@@ -106,6 +110,7 @@ $("#mode-off").onclick = () => KEY && S.staffed && manage("/api/manage/staffed",
 $("#mode-on").onclick = () => KEY && !S.staffed && manage("/api/manage/staffed", { on: true });
 if (!KEY) document.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
 if (KEY) $("#demo").hidden = false;
+if (SANDBOX) $("#sandbox-banner").hidden = false;
 document.querySelectorAll("[data-demo]").forEach((b) => (b.onclick = () => manage(`/api/demo/${b.dataset.demo}`, {})));
 
 // ---- Alexa+ (simulated): MCP client over Streamable HTTP, hosting the MCP App card ----

@@ -122,3 +122,5 @@ button { font: inherit; cursor: pointer; color: inherit; }
 .steps li { font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; background: var(--fill); color: var(--secondary); padding: 2px 8px; border-radius: 6px; }
 .note { font-size: 13px; color: var(--secondary); margin: 6px 0 10px; font-style: italic; }
 .note::before { content: "Camera: "; font-style: normal; font-weight: 600; }
+.sandbox-banner { margin: 12px 16px 0; padding: 12px 16px; border-radius: 14px; background: color-mix(in srgb, var(--blue) 14%, var(--card)); font-size: 15px; }
+.sandbox-banner a { color: var(--blue); }
