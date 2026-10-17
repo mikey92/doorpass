@@ -1,0 +1,14 @@
+{
+  "name": "doorpass",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ring doorbell + booking + member pass = a door that opens itself for unstaffed spaces.",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test 'test/*.test.ts'"
+  },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.1", "zod": "^4.6.7" }
+}

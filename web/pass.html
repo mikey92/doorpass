@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>DoorPass</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body class="pass-body">
+<main class="pass">
+  <div class="site" id="site">DoorPass</div>
+  <h1 id="name">Your pass</h1>
+  <div class="ticket">
+    <div class="room" id="room">—</div>
+    <div class="when" id="when"></div>
+    <div class="plan" id="plan"></div>
+  </div>
+  <button class="open-btn" id="open">I'm at the door</button>
+  <div class="status" id="status">Press the doorbell and tap the button, in either order.</div>
+  <p class="how">The door opens when three things line up: you're booked for now, you pressed the Ring doorbell at the door, and you tapped this pass within a minute of it. No codes to share.</p>
+</main>
+<script type="module">
+const token = location.pathname.split("/").pop();
+const $ = (s) => document.querySelector(s);
+let TZ;
+const tm = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
+let waiting = false;
+
+async function load() {
+  const r = await fetch(`/api/pass/${token}`);
+  if (!r.ok) { $("#name").textContent = "This pass isn't valid"; $("#open").disabled = true; return; }
+  const d = await r.json();
+  TZ = d.tz;
+  $("#site").textContent = d.site;
+  $("#name").textContent = d.member.name;
+  $("#plan").textContent = d.member.plan + (d.member.status !== "active" ? ` · membership ${d.member.status}` : "");
+  if (d.booking) { $("#room").textContent = d.booking.room; $("#when").textContent = `${tm(d.booking.start)} – ${tm(d.booking.end)}${d.booking.live ? " · now" : ""}`; }
+  else { $("#room").textContent = "No booking today"; $("#when").textContent = ""; }
+  if (waiting && d.last?.kind === "open") status("ok", "Door open. Come in! It locks again in 8 seconds.");
+}
+function status(kind, text) { const s = $("#status"); s.className = "status " + kind; s.textContent = text; }
+
+$("#open").onclick = async () => {
+  $("#open").disabled = true;
+  const o = await (await fetch(`/api/pass/${token}/tap`, { method: "POST" })).json();
+  if (o.action === "open") status("ok", "Door open. Come in! It locks again in 8 seconds.");
+  else if (o.action === "wait-ring") { waiting = true; status("wait", "Now press the doorbell. You have 60 seconds."); setTimeout(() => { waiting = false; }, 60_000); }
+  else status("no", o.reason || "The door can't open right now.");
+  setTimeout(() => ($("#open").disabled = false), 3000);
+};
+load();
+new EventSource("/api/stream").addEventListener("log", (e) => { const l = JSON.parse(e.data); if (waiting && l.kind === "open") load(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DoorPass</title>
+<meta name="description" content="DoorPass runs the front door of an unstaffed space: a Ring doorbell press, a booking and a tap on the member's pass open a real smart lock.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111827'/%3E%3Crect x='10' y='6' width='12' height='20' rx='2' fill='none' stroke='%2334d399' stroke-width='2.4'/%3E%3Ccircle cx='18.5' cy='16' r='1.6' fill='%2334d399'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111827"/><rect x="10" y="6" width="12" height="20" rx="2" fill="none" stroke="#34d399" stroke-width="2.4"/><circle cx="18.5" cy="16" r="1.6" fill="#34d399"/></svg>
+    <div><h1>DoorPass <span id="site" class="muted"></span></h1><p class="muted">Ring doorbell + booking + member pass → the door opens itself. Nobody at the desk.</p></div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="ring-chip"><i></i><span id="ring-text">Ring…</span></span>
+    <span class="chip" id="lock-chip"><i></i><span id="lock-text">Lock…</span></span>
+    <button class="chip toggle" id="staffed" title="When staff are on site, DoorPass only announces visitors">Unstaffed</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="col">
+    <div class="panel door" id="door">
+      <div class="door-state"><span class="big" id="door-state">Locked</span><span class="muted" id="door-sub"></span></div>
+      <div id="request"></div>
+      <div class="latency" id="latency" hidden><span>Doorbell → lock open</span><b id="latency-v"></b></div>
+    </div>
+    <div class="panel">
+      <h2>How the door decides</h2>
+      <ol class="rules">
+        <li><b>Presence</b> · a press on the Ring doorbell at this door</li>
+        <li><b>Permission</b> · a booking for now (10 min early is fine)</li>
+        <li><b>Identity</b> · a tap on the member's pass within 60 s of the press</li>
+      </ol>
+      <p class="muted small">All three: the lock opens and re-locks after 8 s. Anything missing: you get a one-tap request; no answer in 90 s, it stays locked. Ring's Partner API is read-only, so the lock is opened through SwitchBot's API; Ring is the eyes and ears.</p>
+    </div>
+    <div class="panel">
+      <h2>Bookings</h2>
+      <ol class="list" id="bookings"></ol>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="panel">
+      <h2>Door log <span class="muted small">every decision, with its evidence</span></h2>
+      <ol class="log" id="log"></ol>
+    </div>
+    <div class="panel">
+      <h2>API calls <span class="muted small">live · Ring Partner API and SwitchBot, secrets hidden</span></h2>
+      <ol class="api" id="api"></ol>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="panel echo">
+      <h2>Ask Alexa <span class="muted small">Alexa+ simulated · DoorPass MCP server</span></h2>
+      <div class="show"><iframe id="card" title="DoorPass door card (MCP App)" sandbox="allow-scripts"></iframe>
+        <p class="said" id="said">“Alexa, who's at the studio door?”</p><p class="reply" id="reply"></p></div>
+      <div class="ask-chips">
+        <button data-q="who">Who's at the door?</button>
+        <button data-q="in">Let them in</button>
+        <button data-q="out">Keep it closed</button>
+        <button data-q="log">Who came in tonight?</button>
+      </div>
+      <details class="mcp"><summary>MCP traffic</summary><pre id="mcp-log"></pre></details>
+    </div>
+    <div class="panel">
+      <h2>Members <span class="muted small">each has a pass link on their phone</span></h2>
+      <ol class="list" id="members"></ol>
+    </div>
+  </section>
+</main>
+
+<footer class="demo" id="demo" hidden>
+  <span>Demo:</span>
+  <button data-demo="ring">🔔 Press the doorbell (simulated webhook)</button>
+  <button data-demo="motion">🚶 Person at the door</button>
+  <button data-demo="reset" class="plain">Reset</button>
+</footer>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
