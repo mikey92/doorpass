@@ -47,6 +47,7 @@ lock's cloud accepts the command (about 0.4 s after the press reaches DoorPass);
 | Ring snapshots | **Real.** After each doorbell press DoorPass fetches Ring's photo of the visitor (`media/image/download`, redirect followed without the Ring token) and shows it on the manager's request and in the door log. Manager view only; the last 100 are kept (mode 600) |
 | Smart lock | **Real.** SwitchBot Lock Vision over SwitchBot OpenAPI v1.1 (unlock, lock, status read-back). Without a `switchbot.json`, a clearly labelled simulated lock is used |
 | Alexa+ | **Simulated client.** Alexa+ add-on tooling isn't open to hackathon entrants, so the dashboard has an Alexa+-style client that talks to DoorPass's real **MCP server** (Streamable HTTP, protocol 2025-11-25) and hosts its **MCP App** card, whose Let in / Keep closed buttons call tools back through the host |
+| Alexa+ brain | **Real, on Amazon Bedrock.** Free speech (typed or spoken) goes to Bedrock's Converse API (Amazon Nova Pro); the model picks DoorPass's MCP tools and DoorPass's own MCP server runs them, with the manager's key only when the asker has it. Without it, the door-opening tools aren't even offered to the model |
 | Bookings and members | Demo data for "Night Owl Rooms" |
 | Demo buttons on the dashboard | Send signed Ring-format webhooks through the same endpoint (manager key required) |
 
@@ -67,6 +68,7 @@ Configuration (all optional; without them DoorPass runs on simulated hardware):
 | `RING_CREDENTIALS_FILE` | The app-credentials CSV the Ring Developer Console shows once (Client ID, Client Secret, HMAC key) |
 | `RING_TOKEN_FILE` | A Ring Developer Playground token, used until an account is linked |
 | `~/.config/doorpass/switchbot.json` | `{"token","secret","deviceId"}` from the SwitchBot app's developer options |
+| `~/.config/doorpass/bedrock.key` or `BEDROCK_API_KEY` | An Amazon Bedrock API key (optional; `BEDROCK_MODEL` defaults to `us.amazon.nova-pro-v1:0`). Without it the Alexa panel uses fixed phrases |
 | `data/manager.key` | Created on first run (mode 600). Open the dashboard as `/#key=<key>` for approvals and demo controls |
 
 Register these URLs for your Ring app: Account Link `…/ring/link`, Token Exchange `…/ring/token`,

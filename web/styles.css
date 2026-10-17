@@ -113,3 +113,10 @@ button { font: inherit; cursor: pointer; color: inherit; }
 .seg button:disabled { color: inherit; }
 .req-snap { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; margin-bottom: 12px; background: var(--fill); }
 .log-snap { display: block; width: 160px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; margin-top: 6px; background: var(--fill); }
+.ask { display: flex; gap: 8px; margin: 12px 0 8px; }
+.ask input { flex: 1; min-width: 0; height: 44px; border-radius: 22px; border: 0; padding: 0 16px; font-size: 16px; background: var(--fill); color: inherit; }
+.ask button { height: 44px; min-width: 44px; border-radius: 22px; border: 0; padding: 0 16px; font-weight: 600; background: var(--blue); color: #fff; }
+.ask #mic { padding: 0; background: var(--fill); color: var(--blue); display: grid; place-items: center; }
+.ask #mic.on { background: var(--red); color: #fff; }
+.steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.steps li { font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; background: var(--fill); color: var(--secondary); padding: 2px 8px; border-radius: 6px; }

@@ -144,11 +144,38 @@ function show(res, speak = true) {
 }
 
 const SAY = { who: ["who_is_at_door", "who's at the studio door?"], in: ["let_them_in", "let them in."], out: ["keep_door_closed", "keep it closed."], log: ["door_log", "who came in tonight?"] };
-async function ask(k) {
-  const [tool, said] = SAY[k];
+let agent = true; // Amazon Bedrock agent; falls back to fixed phrases if the server has no Bedrock key.
+function say(text) {
+  $("#reply").textContent = text;
+  if ("speechSynthesis" in window) {
+    speechSynthesis.cancel();
+    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  }
+}
+async function askAgent(said) {
   $("#said").textContent = `“Alexa, ${said}”`;
   $("#reply").textContent = "…";
+  $("#steps").hidden = true;
+  const r = await fetch(`/api/ask${KEY ? `?key=${encodeURIComponent(KEY)}` : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ said }) });
+  if (r.status === 503) return false;
+  const j = await r.json();
+  if (!r.ok) {
+    $("#reply").textContent = j.error || "Alexa couldn't answer.";
+    return true;
+  }
+  $("#steps").innerHTML = j.steps.map((s) => `<li>${esc(s.tool)}</li>`).join("") + `<li>${esc(j.model.replace(/^us\./, ""))} · ${(j.ms / 1000).toFixed(1)} s</li>`;
+  $("#steps").hidden = false;
+  $("#brain").textContent = "Amazon Bedrock agent · real MCP server";
+  say(j.text);
+  show(await mcp("tools/call", { name: "who_is_at_door", arguments: {} }), false);
+  return true;
+}
+async function ask(k) {
+  const [tool, said] = SAY[k];
   try {
+    if (agent && (await askAgent(said))) return;
+    agent = false;
+    $("#said").textContent = `“Alexa, ${said}”`;
     show(await mcp("tools/call", { name: tool, arguments: k === "log" ? { hours: 12 } : {} }));
     if (k === "in" || k === "out") show(await mcp("tools/call", { name: "who_is_at_door", arguments: {} }), false);
   } catch (e) {
@@ -158,6 +185,33 @@ async function ask(k) {
 // Without the manager key, Alexa can tell you who's there but not open the door.
 if (!KEY) document.querySelectorAll('[data-q="in"], [data-q="out"]').forEach((b) => b.remove());
 document.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => ask(b.dataset.q)));
+$("#ask-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const said = $("#ask-input").value.trim();
+  if (!said) return;
+  $("#ask-input").value = "";
+  try {
+    if (!(await askAgent(said))) $("#reply").textContent = "Free questions need the Bedrock agent; try the buttons.";
+  } catch (err) {
+    $("#reply").textContent = `Alexa couldn't answer (${err.message}).`;
+  }
+};
+// Speak instead of typing (Chrome and Safari).
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) $("#mic").hidden = true;
+else
+  $("#mic").onclick = () => {
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    $("#mic").classList.add("on");
+    rec.onresult = (e) => {
+      $("#ask-input").value = e.results[0][0].transcript.replace(/^alexa,?\s*/i, "");
+      $("#ask-form").requestSubmit();
+    };
+    rec.onend = () => $("#mic").classList.remove("on");
+    rec.start();
+  };
 
 // The card's buttons call tools through the host, as MCP Apps do.
 addEventListener("message", async (e) => {

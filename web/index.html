@@ -71,9 +71,17 @@
 
   <section class="col">
     <div class="echo">
-      <h2>Ask Alexa <span class="muted small">Alexa+ simulated · real MCP server</span></h2>
+      <h2>Ask Alexa <span class="muted small" id="brain">Alexa+ simulated · real MCP server</span></h2>
       <div class="show"><iframe id="card" title="DoorPass door card (MCP App)" sandbox="allow-scripts"></iframe>
         <p class="said" id="said">“Alexa, who's at the studio door?”</p><p class="reply" id="reply"></p></div>
+      <form class="ask" id="ask-form" autocomplete="off">
+        <button type="button" id="mic" aria-label="Speak" title="Speak">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <input id="ask-input" placeholder="Ask anything about the door" maxlength="300" aria-label="Ask Alexa">
+        <button type="submit" id="ask-send">Ask</button>
+      </form>
+      <ol class="steps" id="steps" hidden></ol>
       <div class="ask-chips">
         <button data-q="who">Who's at the door?</button>
         <button data-q="in">Let them in</button>

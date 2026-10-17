@@ -27,6 +27,13 @@ export function buildMcp(gate: Gate, now: () => number, afterChange: () => void,
     return { site: gate.s.site.name, now: t, tz, staffed: gate.staffedNow(t), request: req ? { id: req.id, reason: req.reason, at: req.at, expiresAt: req.expiresAt } : null, lastRing: ring ? ring.at : null, booked: live, recent };
   };
 
+  // The request a tool should act on: the one named if it is still open, otherwise the open one.
+  // (An agent may pass a made-up id; it must not turn into a silent no-op.)
+  const openRequest = (requestId?: string) => {
+    const pending = gate.s.requests.filter((r) => r.status === "pending");
+    return (pending.find((r) => r.id === requestId) ?? pending.at(-1))?.id;
+  };
+
   server.registerResource("door-card", CARD, { mimeType: "text/html;profile=mcp-app", description: "The door: who rang, why, and Let in / Keep closed." }, async () => ({
     contents: [{ uri: CARD, mimeType: "text/html;profile=mcp-app", text: doorCardHtml() }],
   }));
@@ -55,7 +62,7 @@ export function buildMcp(gate: Gate, now: () => number, afterChange: () => void,
       _meta: ui,
     },
     async ({ requestId }) => {
-      const id = requestId ?? [...gate.s.requests].reverse().find((r) => r.status === "pending")?.id;
+      const id = openRequest(requestId);
       if (!id) return { content: [{ type: "text", text: "Nobody is waiting at the door." }], structuredContent: door() };
       const o = await gate.decide(id, true, manager, now());
       afterChange();
@@ -68,11 +75,12 @@ export function buildMcp(gate: Gate, now: () => number, afterChange: () => void,
     "keep_door_closed",
     { title: "Keep it closed", description: "Refuse the visitor DoorPass is asking about.", inputSchema: { requestId: z.string().optional() }, _meta: ui },
     async ({ requestId }) => {
-      const id = requestId ?? [...gate.s.requests].reverse().find((r) => r.status === "pending")?.id;
+      const id = openRequest(requestId);
       if (!id) return { content: [{ type: "text", text: "Nobody is waiting at the door." }], structuredContent: door() };
-      await gate.decide(id, false, manager, now());
+      const o = await gate.decide(id, false, manager, now());
       afterChange();
-      return { content: [{ type: "text", text: "Okay, the door stays locked." }], structuredContent: door() };
+      const text = o.action === "deny" && o.reason === "Denied by the manager" ? "Okay, the door stays locked." : `Nothing to refuse: ${"reason" in o ? o.reason : o.action}.`;
+      return { content: [{ type: "text", text }], structuredContent: door() };
     },
   );
 

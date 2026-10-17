@@ -16,6 +16,7 @@ import { Gate, time, type LogEntry } from "./gate.ts";
 import { RingClient, parseWebhook, verify } from "./ring.ts";
 import { Store, demoState, rollDemoBookings } from "./store.ts";
 import { buildMcp } from "./mcp.ts";
+import { ask, bedrock, MODEL } from "./agent.ts";
 import { makeWebhook, deliver } from "./simulate.ts";
 import { Linker, readCredentials } from "./link.ts";
 import { SimulatedLock, SwitchBotLock, type Lock } from "./lock.ts";
@@ -85,6 +86,28 @@ const ringStatus = { connected: false, via: "" as "" | "linked account" | "playg
 const store = new Store(DATA, () => demoState(Date.now(), SIM_DOOR, TZ));
 const gate = new Gate(store.state, lock);
 const WRITE_TOOLS = new Set(["let_them_in", "keep_door_closed"]);
+
+// Alexa+ agent on Amazon Bedrock (optional: without a key the dashboard falls back to fixed phrases).
+function bedrockKey(): string | undefined {
+  if (process.env.BEDROCK_API_KEY) return process.env.BEDROCK_API_KEY;
+  const f = join(HOME, ".config/doorpass/bedrock.key");
+  return existsSync(f) ? readFileSync(f, "utf8").trim().split("\n")[0] : undefined;
+}
+const askLimit = { at: 0, n: 0 };
+// The agent calls DoorPass's own MCP server, with the manager's key only when the asker has it.
+const selfMcp = (manager: boolean) => {
+  let id = 0;
+  return async (method: string, params?: unknown) => {
+    const r = await fetch(`http://127.0.0.1:${PORT}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25", ...(manager ? { Authorization: `Bearer ${MANAGER_KEY}` } : {}) },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message);
+    return j.result;
+  };
+};
 rollDemoBookings(gate.s, Date.now());
 setInterval(() => {
   rollDemoBookings(gate.s, Date.now());
@@ -307,6 +330,25 @@ async function route(req: IncomingMessage, res: ServerResponse) {
 
   const isManager = same(url.searchParams.get("key") ?? (req.headers["x-manager-key"] as string | undefined), MANAGER_KEY);
   if (p === "/api/state") return json(res, 200, snapshot(isManager));
+  if (req.method === "POST" && p === "/api/ask") {
+    const key = bedrockKey();
+    if (!key) return json(res, 503, { error: "Bedrock not configured" });
+    let said = "";
+    try {
+      said = String(JSON.parse((await body(req)).toString()).said ?? "").slice(0, 300).trim();
+    } catch {}
+    if (!said) return json(res, 400, { error: "say something" });
+    // Public visitors share a small hourly budget; the manager has a bigger one.
+    const hour = Math.floor(Date.now() / 3_600_000);
+    if (askLimit.at !== hour) Object.assign(askLimit, { at: hour, n: 0 });
+    if (++askLimit.n > (isManager ? 300 : 60)) return json(res, 429, { error: "Alexa is resting. Try again later." });
+    try {
+      const a = await ask(said, selfMcp(isManager), bedrock(key, MODEL, undefined, loggedFetch), { canWrite: isManager });
+      return json(res, 200, a);
+    } catch (e) {
+      return json(res, 502, { error: (e as Error).message });
+    }
+  }
   const sm = p.match(/^\/api\/snap\/([0-9a-f]{20})\.jpg$/);
   if (sm) {
     const f = join(SNAPS, `${sm[1]}.jpg`);
