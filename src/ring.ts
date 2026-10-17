@@ -82,16 +82,25 @@ export class RingClient {
     }));
   }
 
-  /** A JPEG from the door at `timestamp` (two-step: POST → 303 → pre-signed GET). Null when Ring has none. */
+  /**
+   * A JPEG from the door at `timestamp`: POST → 303 → pre-signed GET. The redirect is followed by hand so the
+   * Ring token never goes to the storage host. Null while Ring has no media for that moment yet (416).
+   */
   async snapshot(deviceId: string, timestamp: number): Promise<Buffer | null> {
     const r = await this.fetchFn(`${this.base}/v1/devices/${encodeURIComponent(deviceId)}/media/image/download`, {
       method: "POST",
-      redirect: "follow",
+      redirect: "manual",
       headers: { Authorization: `Bearer ${await this.token()}`, "Content-Type": "application/json" },
       body: JSON.stringify({ type: "at_timestamp", timestamp, image_options: { format: "jpeg", resolution: { width: 640, height: 360 } } }),
     });
-    if (!r.ok) return null;
-    return Buffer.from(await r.arrayBuffer());
+    const loc = r.headers.get("location");
+    if (r.status !== 303 || !loc) {
+      if (r.status >= 500 || r.status === 401) throw new RingError(r.status, await r.text());
+      return null;
+    }
+    const g = await this.fetchFn(loc);
+    if (!g.ok) return null;
+    return Buffer.from(await g.arrayBuffer());
   }
 }
 

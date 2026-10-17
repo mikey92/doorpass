@@ -7,8 +7,8 @@
 //   PORT (8842), HOST (127.0.0.1), DATA (./data/state.json), DOORPASS_TZ (America/Los_Angeles)
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -117,11 +117,40 @@ function snapshot(full = false) {
     lock: { kind: lock.kind, name: lock.name },
     members: gate.s.members.map((m) => ({ id: m.id, name: m.name, status: m.status, plan: m.plan, pass: full ? `/pass/${m.passToken}` : null })),
     manager: full,
+    // Visitor photos are for the manager only.
+    snaps: full ? (gate.s.snaps ?? {}) : {},
     bookings: gate.s.bookings.filter((b) => b.end >= now - 3_600_000).sort((a, b) => a.start - b.start).map((b) => ({ ...b, name: gate.member(b.memberId)?.name, live: gate.live(now, b.memberId).some((x) => x.id === b.id) })),
     requests: gate.s.requests.filter((r) => r.status === "pending"),
     log: gate.s.log.slice(-40),
     ring: { ...ringStatus, log: apiLog.slice(-14) },
   };
+}
+
+// A photo of who pressed the doorbell, from Ring, as evidence on the request and in the log.
+// Ring needs a few seconds before the frame is available, so try a handful of times.
+const SNAPS = join(ROOT, "data/snaps");
+async function grabSnapshot(ringId: string, deviceId: string, at: number) {
+  if (!ringStatus.connected || deviceId !== ringStatus.device?.id) return;
+  for (const wait of [2_000, 4_000, 6_000, 10_000]) {
+    await new Promise((r) => setTimeout(r, wait));
+    const jpg = await ring.snapshot(deviceId, at).catch(() => null);
+    if (!jpg) continue;
+    mkdirSync(SNAPS, { recursive: true, mode: 0o700 });
+    const file = createHash("sha256").update(ringId).digest("hex").slice(0, 20) + ".jpg";
+    writeFileSync(join(SNAPS, file), jpg, { mode: 0o600 });
+    const snaps = (gate.s.snaps ??= {});
+    snaps[ringId] = file;
+    // Keep the last 100 photos.
+    const ids = Object.keys(snaps);
+    for (const old of ids.slice(0, Math.max(0, ids.length - 100))) {
+      try {
+        unlinkSync(join(SNAPS, snaps[old]));
+      } catch {}
+      delete snaps[old];
+    }
+    gate.onChange();
+    return;
+  }
 }
 
 async function connectRing() {
@@ -203,7 +232,10 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const a = hook.data.attributes;
     const e = { id: hook.data.id, deviceId: a.source, at: a.timestamp, subType: a.sub_type };
     push("ring", { type: hook.data.type, subType: a.sub_type, at: a.timestamp, receivedAt: Date.now() });
-    if (hook.data.type === "button_press") await gate.ring(e, Date.now());
+    if (hook.data.type === "button_press") {
+      void grabSnapshot(e.id, e.deviceId, e.at);
+      await gate.ring(e, Date.now());
+    }
     else if (hook.data.type === "motion_detected") gate.motion(e, Date.now());
     else if (hook.data.type === "device_offline" || hook.data.type === "device_online") {
       ringStatus.device && (ringStatus.device.online = hook.data.type === "device_online");
@@ -273,6 +305,13 @@ async function route(req: IncomingMessage, res: ServerResponse) {
 
   const isManager = same(url.searchParams.get("key") ?? (req.headers["x-manager-key"] as string | undefined), MANAGER_KEY);
   if (p === "/api/state") return json(res, 200, snapshot(isManager));
+  const sm = p.match(/^\/api\/snap\/([0-9a-f]{20})\.jpg$/);
+  if (sm) {
+    const f = join(SNAPS, `${sm[1]}.jpg`);
+    if (!isManager || !existsSync(f)) return json(res, 404, { error: "not found" });
+    res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" });
+    return res.end(readFileSync(f));
+  }
   if (p === "/api/stream") {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
     res.write(`event: state\ndata: ${JSON.stringify(snapshot(isManager))}\n\n`);

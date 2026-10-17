@@ -61,6 +61,13 @@ Severity: **high** blocks the build, **medium** costs real time or forces a work
 - **Severity:** low, but anyone parsing the id instead of `data.type` breaks.
 - **Suggestion:** fix the docs, or state that `data.id` is opaque.
 
+## 9. Snapshots: the partner name is baked into the image, and "not ready yet" looks like "nothing there"
+- **Task:** attach Ring's photo of whoever pressed the doorbell to the manager's request.
+- **What happened:** with the linked account (unlike the Playground, item 3) `media/image/download` works: 303 → pre-signed GET → 640×360 JPEG. But the frame carries a watermark `Partner: CareBell`, the app's original name, even after renaming the app to DoorPass in the Developer Console. Asking right after the press returns `416 MEDIA_NOT_FOUND`, the same answer as for a moment with no recording at all.
+- **Severity:** low.
+- **Suggestion:** take the watermark from the current app name; return a distinct status (or `Retry-After`) while media for a recent event is still processing.
+- **Workaround:** retry at 2, 6, 12 and 22 s after the press; the photo usually arrives on the first or second try.
+
 ## What worked well
 - With a real doorbell linked through one-way account linking, a button press reached our webhook **1.4 s** after Ring's own event timestamp, signed and verifiable.
 - `GET /v1/devices`, `/status`, `/capabilities` answered first time with a Playground token; JSON:API responses are consistent.

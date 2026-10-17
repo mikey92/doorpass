@@ -19,6 +19,11 @@ const LOCKED = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stro
 const OPENED = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>';
 const GLYPH = { ring: "🔔", pass: "📱", open: "✓", confirm: "✓", relock: "🔒", request: "?", approve: "✓", deny: "✕", expire: "⏱", enter: "👤", notify: "🔔", "lock-error": "!" };
 const sec = (ms) => `${(ms / 1000).toFixed(1)} s`;
+// Ring's photo of whoever pressed the doorbell (manager view only).
+const snap = (ringId) => {
+  const f = ringId && S?.snaps?.[ringId];
+  return f ? `/api/snap/${encodeURIComponent(f)}?key=${encodeURIComponent(KEY)}` : "";
+};
 
 function render(s) {
   const first = !S;
@@ -47,7 +52,7 @@ function render(s) {
 
   const req = s.requests[0];
   $("#request").innerHTML = req
-    ? `<div class="req"><b>Someone is at the door</b><div class="m">${esc(req.reason)} · rang ${tms(req.at)} · closes in <span id="left"></span></div>${KEY ? `<div class="btns"><button class="in" data-decide="1">Let in</button><button data-decide="0">Keep closed</button></div>` : ""}</div>`
+    ? `<div class="req">${snap(req.ringId) ? `<img class="req-snap" src="${snap(req.ringId)}" alt="Ring photo of the visitor">` : ""}<b>Someone is at the door</b><div class="m">${esc(req.reason)} · rang ${tms(req.at)} · closes in <span id="left"></span></div>${KEY ? `<div class="btns"><button class="in" data-decide="1">Let in</button><button data-decide="0">Keep closed</button></div>` : ""}</div>`
     : "";
   document.querySelectorAll("[data-decide]").forEach((b) => (b.onclick = () => manage("/api/manage/decide", { requestId: req.id, approve: b.dataset.decide === "1" })));
 
@@ -73,7 +78,8 @@ function render(s) {
         seen.add(l.id);
         const ev = (l.evidence ?? []).map((e) => `<span>${esc(e.split(":")[0])}</span>`).join("") + (l.latencyMs != null ? `<span>${sec(l.latencyMs)}</span>` : "");
         const flags = (l.flags ?? []).map((f) => ` <span class="flag">⚠ ${esc(f)}</span>`).join("");
-        return `<div class="row ic-row${fresh ? " new" : ""}"><div class="glyph g-${esc(l.kind)}" title="${esc(l.kind)}">${GLYPH[l.kind] ?? "•"}</div><div class="main">${esc(l.text)}${flags}${ev ? `<div class="ev">${ev}</div>` : ""}</div><time>${tms(l.at)}</time></div>`;
+        const photo = ["ring", "request", "open", "notify"].includes(l.kind) ? snap(l.ringId) : "";
+        return `<div class="row ic-row${fresh ? " new" : ""}"><div class="glyph g-${esc(l.kind)}" title="${esc(l.kind)}">${GLYPH[l.kind] ?? "•"}</div><div class="main">${esc(l.text)}${flags}${ev ? `<div class="ev">${ev}</div>` : ""}${photo ? `<a href="${photo}" target="_blank" rel="noopener"><img class="log-snap" src="${photo}" alt="Ring photo"></a>` : ""}</div><time>${tms(l.at)}</time></div>`;
       })
       .join("") || `<div class="row"><div class="main muted">Nothing yet tonight</div></div>`;
   $("#api").innerHTML = r.log.slice().reverse().map((a) => `<li><time>${tms(a.at)}</time> <b>${esc(a.method)}</b> ${esc(a.path)} → ${esc(a.status)} <span class="muted">${esc(a.ms)} ms</span></li>`).join("") || "<li class=\"muted\">No calls yet</li>";

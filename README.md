@@ -44,6 +44,7 @@ lock's cloud accepts the command (about 0.4 s after the press reaches DoorPass);
 | Ring doorbell | **Real.** A Ring Battery Doorbell 2K, linked to DoorPass through the Ring Developer Console's private app and **one-way account linking** (token exchange, nonce matching after manager sign-in, `POST` + `PATCH /v1/accounts/me/app-integrations`, refresh tokens) |
 | Ring webhooks | **Real.** HMAC-SHA256 over the raw body, verified before parsing; a press reached DoorPass 1.4 s after Ring's event timestamp |
 | Ring REST calls | **Real.** Devices, status, capabilities; shown live (without tokens) on the dashboard |
+| Ring snapshots | **Real.** After each doorbell press DoorPass fetches Ring's photo of the visitor (`media/image/download`, redirect followed without the Ring token) and shows it on the manager's request and in the door log. Manager view only; the last 100 are kept (mode 600) |
 | Smart lock | **Real.** SwitchBot Lock Vision over SwitchBot OpenAPI v1.1 (unlock, lock, status read-back). Without a `switchbot.json`, a clearly labelled simulated lock is used |
 | Alexa+ | **Simulated client.** Alexa+ add-on tooling isn't open to hackathon entrants, so the dashboard has an Alexa+-style client that talks to DoorPass's real **MCP server** (Streamable HTTP, protocol 2025-11-25) and hosts its **MCP App** card, whose Let in / Keep closed buttons call tools back through the host |
 | Bookings and members | Demo data for "Night Owl Rooms" |
@@ -76,7 +77,7 @@ Webhook `…/webhooks/ring`, Homepage `/`.
 | Tool | What it does |
 |---|---|
 | `who_is_at_door` | Who rang, whether they're booked, whether DoorPass is waiting on the manager. Returns the MCP App door card |
-| `let_them_in` / `keep_door_closed` | Answer the open request |
+| `let_them_in` / `keep_door_closed` | Answer the open request. These two need the manager key (`Authorization: Bearer <key>`); reading the door doesn't |
 | `door_log` | Openings, refusals and flags over the last N hours |
 | `todays_bookings` | Who is booked from now on |
 

@@ -60,6 +60,8 @@ export interface GateState {
   seen: string[];
   /** When the door last opened, for counting who walks in. */
   openedAt?: number;
+  /** Ring snapshots of doorbell presses: ring id → file under data/snaps. */
+  snaps?: Record<string, string>;
 }
 
 export const RULES = {

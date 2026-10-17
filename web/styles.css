@@ -111,3 +111,5 @@ button { font: inherit; cursor: pointer; color: inherit; }
 
 @media (max-width: 1150px) { .grid { grid-template-columns: 1fr; } .right { align-items: flex-start; } }
 .seg button:disabled { color: inherit; }
+.req-snap { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; margin-bottom: 12px; background: var(--fill); }
+.log-snap { display: block; width: 160px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; margin-top: 6px; background: var(--fill); }
