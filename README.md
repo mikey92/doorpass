@@ -42,7 +42,7 @@ lock's cloud accepts the command (about 0.4 s after the press reaches DoorPass);
 | Piece | Status |
 |---|---|
 | Ring doorbell | **Real.** A Ring Battery Doorbell 2K, linked to DoorPass through the Ring Developer Console's private app and **one-way account linking** (token exchange, nonce matching after manager sign-in, `POST` + `PATCH /v1/accounts/me/app-integrations`, refresh tokens) |
-| Ring webhooks | **Real.** HMAC-SHA256 over the raw body, verified before parsing; a press reached DoorPass 1.4 s after Ring's event timestamp |
+| Ring webhooks | **Real.** HMAC-SHA256 over the raw body, verified before parsing; retries deduped on `request_id`, events older than 10 minutes refused as replays; a press reached DoorPass 1.4 s after Ring's event timestamp. The signing, simulator and receiver are also published on their own as [ring-webhook-kit](https://github.com/mikey92/ring-webhook-kit) |
 | Ring REST calls | **Real.** Devices, status, capabilities; shown live (without tokens) on the dashboard |
 | Ring snapshots | **Real.** After each doorbell press DoorPass fetches Ring's photo of the visitor (`media/image/download`, redirect followed without the Ring token) and shows it on the manager's request and in the door log. Manager view only; the last 100 are kept (mode 600) |
 | Smart lock | **Real.** SwitchBot Lock Vision over SwitchBot OpenAPI v1.1 (unlock, lock, status read-back). Without a `switchbot.json`, a clearly labelled simulated lock is used |

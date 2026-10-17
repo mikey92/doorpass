@@ -230,6 +230,8 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     if (gate.s.seen.includes(hook.meta.request_id)) return;
     gate.s.seen.push(hook.meta.request_id);
     const a = hook.data.attributes;
+    // A signed webhook never expires on its own; an event older than 10 minutes is a replay, not a visitor.
+    if (Date.now() - a.timestamp > 10 * 60_000) return;
     const e = { id: hook.data.id, deviceId: a.source, at: a.timestamp, subType: a.sub_type };
     push("ring", { type: hook.data.type, subType: a.sub_type, at: a.timestamp, receivedAt: Date.now() });
     if (hook.data.type === "button_press") {
