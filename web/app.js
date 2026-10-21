@@ -140,9 +140,10 @@ const cardReady = new Promise((ok) => (frame.onload = ok));
   }
 })();
 
-function show(res, speak = true) {
+// keepReply: refresh the card without replacing what Alexa just said.
+function show(res, speak = true, keepReply = false) {
   const text = res.content.map((c) => c.text).join(" ");
-  $("#reply").textContent = text;
+  if (!keepReply) $("#reply").textContent = text;
   if (res.structuredContent && "request" in res.structuredContent) frame.contentWindow.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: res }, "*");
   if (speak && "speechSynthesis" in window) {
     speechSynthesis.cancel();
@@ -174,7 +175,7 @@ async function askAgent(said) {
   $("#steps").hidden = false;
   $("#brain").textContent = "Amazon Bedrock agent · real MCP server";
   say(j.text);
-  show(await mcp("tools/call", { name: "who_is_at_door", arguments: {} }), false);
+  show(await mcp("tools/call", { name: "who_is_at_door", arguments: {} }), false, true);
   return true;
 }
 async function ask(k) {
@@ -234,5 +235,5 @@ addEventListener("message", async (e) => {
 // A new ring refreshes the card, the way an Alexa+ notification would surface it.
 new EventSource("/api/stream").addEventListener("log", async (e) => {
   const l = JSON.parse(e.data);
-  if (["request", "open", "expire", "deny"].includes(l.kind)) show(await mcp("tools/call", { name: "who_is_at_door", arguments: {} }), false);
+  if (["request", "open", "expire", "deny"].includes(l.kind)) show(await mcp("tools/call", { name: "who_is_at_door", arguments: {} }), false, true);
 });
