@@ -62,7 +62,7 @@ Node 22.18 or later (TypeScript runs natively).
 
 ```bash
 npm install
-npm test            # 17 tests: the gate's rules, account linking, webhook signatures
+npm test            # 28 tests: the gate's rules, account linking, webhook signatures, snapshots, the agent
 npm start           # http://localhost:8842
 ```
 
