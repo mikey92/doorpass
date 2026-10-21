@@ -7,6 +7,8 @@ else becomes a one-tap request to the manager, on their phone or by asking Alexa
 Built for the [Amazon Developer Hackathon](https://amazonappdev2026.devpost.com) (Ring track; also
 entered in Alexa+).
 
+▶ **[Watch the 2-minute demo](https://youtu.be/guCVDKx-6BI)**
+
 **Live:** https://doorpass.snack-wrap.com (read-only without the manager key)
 
 
